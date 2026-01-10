@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<head>
+    <link rel="stylesheet" type="text/css" href="/static/styles.css">
+    <title>Home Page</title>
+</head>
+<body>
+    <header>
+        <h1 class="left-padded">Boxcar</h1>
+        <nav>
+            <menu class="left-padded">
+                <a href="/">Home</a>
+                <a href="/queue">Upload Queue</a>
+                <a href="/settings">Settings</a>
+            </menu>
+        </nav>  
+    </header>
+    <main class="flex-col">
+        <div class="upload-container">
+            <div class="upload-image-container">
+                <img src="{{ thumbnail }}">
+                <span class="text-center">{{ filepath }}</span>
+            </div>
+            <div class="grid-divider vertical"></div>
+            <div class="upload-edit-container">
+                <form action="\finalize_post" method="post">
+                    <div class="tab-list">
+                        <a onclick="switchTab(0)" href="#" id="tab-selector-0" class="tab active">Sources</a>
+                        <a onclick="switchTab(1)" href="#" id="tab-selector-1" class="tab ">Tags</a>
+                        <a onclick="switchTab(2)" href="#" id="tab-selector-2" class="tab ">Video Editing</a>
+                    </div>
+                    <div class="tab-panels">
+                        <div id="tab-panel-0" name="sources-panel">
+                            <div>
+                                <label for="sources-input">Sources</label>
+                                <textarea name="sources-input" id="sources-input" class="text-input">{{source}}</textarea>
+                            </div>
+                            <div>
+                                <label for="title-input">Original Title</label>
+                                <input name="title-input" id="title-input" class="text-input">
+                            </div>
+                            <div>
+                                <label for="description-input">Original description</label>
+                                <textarea name="description-input" id="description-input" class="text-input"></textarea>
+                            </div>
+                            <div>
+                                <label for="parent-input">Parent Post ID</label>
+                                <input name="parent-input" id="parent-input" class="text-input">
+                            </div>
+                            <div>
+                                <label for="children-input">children Post IDs</label>
+                                <input name="children-input" id="children-input" class="text-input">
+                            </div>
+                        </div>
+                        <div id="tab-panel-1" name="tags" class="hidden">
+                            <div>
+                                <label for="tags-input">Tags</label>
+                                <textarea name="tags-input" id="tags-input" class="text-input">{{tags}}</textarea>
+                            </div>
+                            <div>
+                                <label for="rating-input">Rating</label>
+                                <input name="rating-input" id="rating-input" class="text-input">
+                            </div>
+                        </div>
+                        <div id="tab-panel-2" name="video-editing" class="hidden">
+                        </div>
+                    </div>
+                    <div class="input hidden">
+                        <input class="hidden" type="hidden" name="filepath-input" value="{{ filepath }}">
+                        <input class="hidden" type="hidden" name="post-id" value="{{ post_id }}">
+                        <input class="hidden" type="hidden" name="is_hidden" value="False">
+                        <input class="hidden" type="hidden" name="job_id" value="{{ job_id }}">
+                        <input class="hidden" type="hidden" name="thumbnail" value="{{ thumbnail }}">
+                    </div>
+                    <input type="submit" value="Create Post">
+                </form>
+            </div>
+        </div>
+    </main>
+</body>
+<script src="/static/tabs.js"></script>
+</html>

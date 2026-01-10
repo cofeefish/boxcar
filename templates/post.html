@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<head>
+    <link rel="stylesheet" type="text/css" href="/static/styles.css">
+    <title>{{post.id}}: {{post.title}}</title>
+</head>
+<body>
+    <header>
+        <h1 class="left-padded">Boxcar</h1>
+        <nav>
+            <menu class="left-padded">
+                <a href="/">Home</a>
+                <a href="/queue">Upload Queue</a>
+                <a href="/settings">Settings</a>
+            </menu>
+        </nav>  
+    </header>
+    <main class="flex-row">
+        <aside class="sidebar">
+            <h2>Search</h2>
+            <div class="search-box">
+                <form>
+                    <input type="text">
+                </form>
+            </div>
+
+            <h2>tags</h2>
+            <ul>    
+                {%for tag in post.tag_list %}
+                    <li class="tag-list-element">
+                        <a    class="tag-wiki-link"   href="/wiki/{{tag}}">?</a>
+                        <a    class="tag-search-link" href="?q={{tag}}">{{tag}}</a>
+                    </li>
+                {% endfor %}
+            </ul>
+
+            <h2>Information</h2>
+            <ul>
+                <li id="post_id">ID: {{post.id}}</li>
+                <li>Date Created: {{post.creation_date}}</li>
+                <li>Date Modified: {{post.modified_date}}</li>
+                <li>Hidden: {{post.is_hidden}}</li>
+                <li>Parent: {{post.parent_id}}</li>
+                <li>Children: {{post.children}}</li>
+                <li>Score: {{post.score}}</li>
+                <li>Favorite: {{post.fav}}</li>
+                <li>Views: {{post.views}}</li>
+                <li>
+                    Sources:
+                    {% for source in post.sources %}
+                        <a href="{{source}}">{{source[8:20]}}</a>
+                    {% endfor %}
+                </li>
+                <li>Rating: {{post.rating}}</li>
+                <li>File Path: {{post.filepath}}</li>
+                <li>File Extenstion: {{post.file_ext}}</li>
+                <li>File Size: {{post.file_size}}</li>
+                <li>Media Dimensions: {{post.media_height}}x{{post.media_width}}x{{post.duration}}</li>
+                <li>Framerate: {{post.framerate}}</li>
+            </ul>
+        </aside>
+        <section>
+            {% if post.file_type == "video" %}
+            <video class="post-media" src="{{ media_url }}" alt="media" controls></video>
+            {% else %}
+            <img   class="post-media" src="{{ media_url }}" alt="media" >
+            {% endif %}
+            <button onclick="unhide_edit()">Edit</button>
+            <a title="not implemented">Reimport tags</a>
+            <a id="delete" onclick="delete_post()">Delete post</a>
+            <p>
+                <h3>{{post.title}}</h3>
+                {{post.description}}
+            </p>
+        </section>
+        <section style="display: none;" id="edit_container">
+            <h2>Edit Post</h2>
+                        <div class="upload-edit-container">
+                <form action="\edit_post\{{post.id}}" method="post">
+                    <div class="tab-list">
+                        <a onclick="switchTab(0)" href="#" id="tab-selector-0" class="tab active">Sources</a>
+                        <a onclick="switchTab(1)" href="#" id="tab-selector-1" class="tab ">Tags</a>
+                        <a onclick="switchTab(2)" href="#" id="tab-selector-2" class="tab ">Video Editing</a>
+                    </div>
+                    <div class="tab-panels">
+                        <div id="tab-panel-0" name="sources-panel">
+                            <div>
+                                <label for="sources-input">Sources</label>
+                                <textarea name="sources-input" id="sources-input" class="text-input">{% for source in post.sources %}{{source}} {% endfor %}</textarea>
+                            </div>
+                            <div>
+                                <label for="title-input">Original Title</label>
+                                <input name="title-input" id="title-input" class="text-input" value="{{post.title}}">
+                            </div>
+                            <div>
+                                <label for="description-input">Original description</label>
+                                <textarea name="description-input" id="description-input" class="text-input">{{post.description}}</textarea>
+                            </div>
+                            <div>
+                                <label for="parent-input">Parent Post ID</label>
+                                <input name="parent-input" id="parent-input" class="text-input" value="{{post.parent_id}}">
+                            </div>
+                            <div>
+                                <label for="children-input">children Post IDs</label>
+                                <input name="children-input" id="children-input" class="text-input" value="{{post.children}}">
+                            </div>
+                        </div>
+                        <div id="tab-panel-1" name="tags" class="hidden">
+                            <div>
+                                <label for="tags-input">Tags</label>
+                                <textarea name="tags-input" id="tags-input" class="text-input">{% for tag in post.tag_list %}{{tag}} {% endfor %}</textarea>
+                            </div>
+                            <div>
+                                <label for="rating-input">Rating</label>
+                                <input name="rating-input" id="rating-input" class="text-input" value="{{post.rating}}">
+                            </div>
+                        </div>
+                        <div id="tab-panel-2" name="video-editing" class="hidden">
+                        </div>
+                    </div>
+                    <input type="submit" value="submit edit">
+                </form>
+            </div>
+        </section>
+    </main>
+</body>
+<script src="/static/tabs.js"></script>
+<script>
+function unhide_edit(){
+    const edit_container = document.getElementById("edit_container")
+    edit_container.style.display = "inline"
+}
+
+async function send_request(post_id){
+    fetch("/delete_post/" + post_id, {
+        method: "POST",
+        headers: {
+            "Content-type": "application/json; charset=UTF-8"
+        }
+    });
+}
+async function delete_post() {
+    const post_id = document.getElementById("post_id").innerText.split(' ')[1];
+    const message = 'delete post ' + post_id + ' permenatly?';
+    if (confirm(message)) {
+        await send_request(post_id);
+        window.location.href = '/';
+    }
+}
+</script>
+</html>

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<head>
+    <link rel="stylesheet" type="text/css" href="/static/styles.css">
+    <title>Home Page</title>
+</head>
+<body>
+    <header>
+        <h1 class="left-padded">Boxcar</h1>
+        <nav>
+            <menu class="left-padded">
+                <a href="/">Home</a>
+                <a href="/queue">Upload Queue</a>
+                <a href="/settings">Settings</a>
+            </menu>
+        </nav>  
+    </header>
+    <form class="flex-col" id="new_upload" action="/upload" data-remote="true" method="post" enctype="multipart/form-data">
+      <div class="loader top" hidden="true" id="loader"></div>
+      <div style="background-color: var(--form-input-background);">
+        <div class="input file optional upload_files hidden">
+            <label class="file optional" for="upload_files">Files</label>
+            <input id='clickform' multiple="multiple" class="file optional" type="file" name="upload[files][]">
+        </div>
+        
+        <div class="dropzone-container" id="drop_zone" ondrop="dropHandler(event);" ondragover="dragOverHandler(event);" ondragleave="dragoffHandler(event)" onclick="clickHandler(event)">
+            Choose file or drag image here
+        </div>
+        <p class="text-center no-lower-space">— or —</p>
+        
+        <div class="input text-center med-padding">
+            <input class="text-center" placeholder="Paste URL here" type="text" name="upload[source]" id="upload_source" onchange="urlHandler(event)">
+        </div>
+        <div class="input hidden">
+            <input class="hidden" type="hidden" name="upload[referer_url]" id="upload_referer_url">
+        </div>
+        <input type="submit" name="commit" value="Upload" class="text-center hidden">
+      </div>
+    </form>
+</body>
+<script type="text/javascript">
+    function urlHandler(ev) {
+      document.getElementById("loader").hidden = false;
+      ev.preventDefault();
+      const form = document.getElementById("new_upload");
+      form.action = "/upload";
+      form.submit();
+    }
+
+    function clickHandler(ev) {
+      document.getElementById("loader").hidden = false;
+      const input_element = document.getElementById('clickform');
+      input_element.click();
+      input_element.addEventListener("change", clickfile, false);
+
+    }
+
+    function clickfile() {
+      const file_list = this.files;
+      const upload_files = document.getElementById("clickform");
+      upload_files.files = file_list;
+      document.getElementById("new_upload").submit();
+    }
+
+    function dragOverHandler(ev) {
+      console.log('File(s) in drop zone');
+      document.getElementById("drop_zone").style = "background: var(--uploads-dropzone-active);"
+
+      // Prevent default behavior (Prevent file from being opened)
+      ev.preventDefault();
+    }
+
+    function dragoffHandler(ev) {
+        console.log('left drop zone');
+        document.getElementById("drop_zone").style = "background: var(--uploads-dropzone-background);"
+    }
+
+    function dropHandler(ev) {
+      document.getElementById("loader").hidden = false;
+      console.log('File(s) dropped');
+        
+      // Prevent default behavior (Prevent file from being opened)
+      ev.preventDefault();
+
+      if (ev.dataTransfer.items) {
+        // Use DataTransferItemList interface to access the file(s)
+        const all_files = new DataTransfer();
+        for (var i = 0; i < ev.dataTransfer.items.length; i++) {
+          // If dropped items aren't files, reject them
+          if (ev.dataTransfer.items[i].kind === 'file') {
+            var file = ev.dataTransfer.items[i].getAsFile();
+            ev.dataTransfer.files[i] = file
+            console.log('... file[' + i + '].name = ' + file.name);
+          }
+        
+        }
+        const upload_files = document.getElementById("clickform");
+        upload_files.files = ev.dataTransfer.files;
+        console.log(upload_files.files)
+        document.getElementById("new_upload").submit();
+      }//
+
+      // Pass event to removeDragData for cleanup
+      removeDragData(ev)
+    }
+
+    function removeDragData(ev) {
+      console.log('Removing drag data')
+
+      if (ev.dataTransfer.items) {
+        document.getElementById("drop_zone").style = "background: var(--uploads-dropzone-background);"
+        // Use DataTransferItemList interface to remove the drag data
+        ev.dataTransfer.items.clear();
+      }
+    }
+</script>
