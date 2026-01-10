@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<head>
+    <link rel="stylesheet" type="text/css" href="/static/styles.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    <title>Home Page</title>
+</head>
+<body>
+    <header>
+        <h1 class="left-padded">Boxcar</h1>
+        <nav>
+            <menu class="left-padded">
+                <a href="/">Home</a>
+                <a href="/queue">Upload Queue</a>
+                <a href="/settings">Settings</a>
+            </menu>
+        </nav>  
+    </header>
+    <main>
+        <div class="flex-row">
+            <aside class="sidebar">
+                <h2>Search</h2>
+                <div class="search-box">
+                    <form id="search-box-form" action="/" method="get" accept-charset="UTF-8">
+                        <span class="flex-row">
+                            <input name="query" type="text" value="{{search}}">
+                            <button type="submit" class="icon-button"> <i class="material-icons">search</i></button>
+                        </span>
+                    </form>
+                </div>
+                <h2>Tags</h2>
+                <div class="">
+                    <ul>    
+                    {%for tag in tag_dict %}
+                        <li class="tag-list-element">
+                            <a    class="tag-wiki-link"   href="\wiki\{{tag[0]}}">?</a>
+                            <a    class="tag-search-link" href="?query={{tag[0]}}">{{tag[0]}}</a>
+                            <span class="tag-count">{{tag[1]}}</span>
+                        </li>
+                    {% endfor %}
+                    </ul>
+                </div>
+            </aside>
+            <section class="flex-col flex-1">
+                <h2>Posts</h2>
+                <div class="post-grid">
+                    {% if posts|length == 0 %}
+                        <p>No posts found.</p>
+                    {% endif %}
+                    {% for post in posts %}
+
+                    {% set border = "" %}
+                    {% if post.duration!=0 %}
+                        {% set border = "video_border" %}
+                    {% endif %}
+                        <div class="post {{border}}">
+                            <a href="/posts/{{post.id}}">
+                                <img src="{{post.thumbnail_link}}" data-title="{{ post.tag_string }}">
+                            </a>
+                        </div>
+                    {% endfor %}
+                </div>
+                <p id="paginatior"></p>
+            </section>
+        </div>
+    </main>
+</body>
+<script src="/static/paginatior.js"></script>
+<script>
+    window.onload  = function() {
+        const element = paginator();
+        const paginator_element = document.getElementById("paginatior")
+        paginator_element.after(element)
+    };
+</script>
