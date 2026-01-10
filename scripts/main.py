@@ -56,5 +56,5 @@ if __name__ == '__main__':
 
     hostname = socket.gethostname()
     ip_address = socket.gethostbyname(hostname)
-    print(f'Server started on {hostname} at {ip_address}:{port}')
+    print(f'Server started on {hostname} at http://{ip_address}:{port}')
     app.run(debug=True, host=host, port=port)
