@@ -9,8 +9,9 @@ FUTURE
 ----
  - [ ] logo
  - [ ] finish readme
+ - [ ] more file types (audio, text)
  - [ ] more versatile importer (yt-dlp)
  - [ ] tag stuff
- - [ ] more seach stuff (sorting etc)
+ - [ ] more search stuff (sorting etc)
  - [ ] c executables for costly functions
  - [ ] bulk edit
