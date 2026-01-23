@@ -120,6 +120,11 @@ ol, ul, menu {
 /*#########################################################################################*/
 /*#########################################################################################*/
 /*specific classes*/
+.page-content {
+  margin-left: 1em;
+  margin-right: 1em;
+}
+
 .paginator {
   display: flex;
   flex-direction: row;
@@ -128,7 +133,6 @@ ol, ul, menu {
 
 .sidebar{
   word-wrap: anywhere;
-  padding-left: 1rem;
   min-width: 250px;
   flex: 0 1 0%;
 }

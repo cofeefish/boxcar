@@ -344,9 +344,12 @@ def get_queue():
     for event in event_dicts:
         #group events by job id, add to unprocessed until completed or error
         event_type = event["event_type"]
+        job_id = event["job_id"]
+        full_job = [x for x in queue['unprocessed'] if x["job_id"] == job_id]
+        
+        if (len(full_job) == 0): continue
+
         if event_type == "COMPLETE":
-            job_id = event["job_id"]
-            full_job = [x for x in queue['unprocessed'] if x["job_id"] == job_id]
             event_types = [x['event_type'] for x in full_job]
             image_path = event['details'][0]
             
@@ -384,9 +387,6 @@ def get_queue():
             queue['completed'].append(job)
             queue['unprocessed'] = [x for x in queue['unprocessed'] if x["job_id"] != job_id]
         elif event_type == "ERROR":
-            job_id = event["job_id"]
-            full_job = [x for x in queue['unprocessed'] if x["job_id"] == job_id]
-            
             job = queue_item()
             job.create(
                 date = full_job[0]['date'],

@@ -45,7 +45,9 @@ def create_post(method, request_obj: Request, job_id):
     t=database.quicktimer("thumbnail")
     thumbnail = helpers.make_thumbnaill(path.strip("'"), size=(1024,1024), to_link=True)
     t.finish()
-    return render_template('create_post.html',source=source, thumbnail=thumbnail, filepath=path, job_id=job_id, tags=tags)
+
+    media = helpers.get_media_attributes(path.strip("'"))
+    return render_template('create_post.html',source=source, thumbnail=thumbnail, filepath=path, job_id=job_id, tags=tags, media=media)
 
 def finalize_post(method, request_obj: Request):
     form = request_obj.form 
@@ -136,7 +138,9 @@ def upload(method, request_obj: Request):
         
         if (url != ""):
             filepath=database.temp_dir
-            importer.save_media_from_url(filepath, sources = [url])
+            url_list = url.split(' ')
+            for url in url_list:
+                importer.save_media_from_url(filepath, sources = [url])
         else:
             for file in all_files:
                 database.add_file_to_queue(file)
