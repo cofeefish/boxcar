@@ -11,7 +11,7 @@ post_table_path = database.post_table_path
 
 
 image_extensions = ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'tiff', 'svg', 'gif']
-video_extensions = ['mp4', 'webm', 'avi', 'flv', 'mov', 'wmv', 'mkv', 'm4v']
+video_extensions = ['mp4', 'webm', 'avi', 'flv', 'mov', 'wmv', 'mkv', 'm4v', 'mpeg']
 
 def is_float(string:str) -> bool:
     try:
@@ -366,7 +366,7 @@ def get_queue():
                 #delete file
                 if os.path.isfile(image_path):
                     os.remove(image_path)
-
+                    pass
                 continue
             #print(thumbnail, '\n\n')
 

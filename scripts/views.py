@@ -93,6 +93,10 @@ def edit_post(post_id, request_obj: Request):
     post_obj.title = form.get('title-input', '')
     post_obj.description = form.get('description-input', '')
 
+    void, post_trim_in, post_trim_out = form.get('marker_times', '').split(', ')
+    import video_editor
+    video_editor.crop_trim(post_obj.filepath, post_obj.filepath, 0, 0, -1, -1, float(post_trim_in), float(post_trim_out))
+
     post_obj.save()
     media_url = url_for('media', filename=post_obj.filepath)
     return render_template("post.html", post=post_obj, media_url=media_url)
@@ -143,8 +147,8 @@ def upload(method, request_obj: Request):
                 importer.save_media_from_url(filepath, sources = [url])
         else:
             for file in all_files:
+                #print(f"Uploading file: {file.filename}")
                 database.add_file_to_queue(file)
 
-        #
         return redirect("/queue")
     return redirect("/")

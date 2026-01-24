@@ -58,19 +58,21 @@
                 <li>Framerate: {{post.framerate}}</li>
             </ul>
         </aside>
-        <section>
+        <section class="flex-col">
             {% if post.file_type == "video" %}
-            <video class="post-media" src="{{ media_url }}" alt="media" controls></video>
+            <video id="video" class="post-media" src="{{ media_url }}" alt="media" controls></video>
             {% else %}
             <img   class="post-media" src="{{ media_url }}" alt="media" >
             {% endif %}
-            <button onclick="unhide_edit()">Edit</button>
-            <a title="not implemented">Reimport tags</a>
-            <a id="delete" onclick="delete_post()">Delete post</a>
-            <p>
-                <h3>{{post.title}}</h3>
-                {{post.description}}
-            </p>
+            <span>
+                <button onclick="unhide_edit()">Edit</button>
+                <a title="not implemented">Reimport tags</a>
+                <a id="delete" onclick="delete_post()">Delete post</a>
+                <p>
+                    <h3>{{post.title}}</h3>
+                    {{post.description}}
+                </p>
+            </span>
         </section>
         <section style="display: none;" id="edit_container">
             <h2>Edit Post</h2>
@@ -115,6 +117,11 @@
                             </div>
                         </div>
                         <div id="tab-panel-2" name="video-editing" class="hidden">
+                            {% if post.duration != 0 %}
+                            <canvas class="video-trimmer" id="video-trimmer"></canvas>
+                            <data id="segment_list" data-marker_times="" data-marker_pos_list=""></data>
+                            {% endif %}
+                            <input class="hidden" type="hidden" name="marker_times" id="marker_times_input" value="">
                         </div>
                     </div>
                     <input type="submit" value="submit edit">
@@ -124,6 +131,7 @@
     </main>
 </body>
 <script src="/static/tabs.js"></script>
+<script src="/static/video_editor.js"></script>
 <script>
 function unhide_edit(){
     const edit_container = document.getElementById("edit_container")

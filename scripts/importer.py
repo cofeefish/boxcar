@@ -18,7 +18,7 @@ blacklist = ['logo', 'icon', '.js', 'avatar',
             'thumbnail', 'watermark',
             'banner', 'profile', '.svg']
 image_extensions = ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'tiff', 'svg', 'gif']
-video_extensions = ['mp4', 'webm', 'avi', 'flv', 'mov', 'wmv', 'mkv', 'm4v']
+video_extensions = ['mp4', 'webm', 'avi', 'flv', 'mov', 'wmv', 'mkv', 'm4v', 'mpeg']
 
 #small helpers
 
@@ -94,7 +94,7 @@ def save_media_from_url(path: str, name = "", sources = []):
             if url_is_valid:
                 media_found = False
 
-                extension = url.split('.')[-1].lower()
+                extension = url.split('.')[-1].lower().split('?')[0]
                 if not ('https://' in url or 'http://' in url):
                     url = "http://" + url
                 if is_media_url(parsed_uri):
