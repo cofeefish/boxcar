@@ -1,7 +1,6 @@
 /*site-wide varibles*/
 html {
-    font-family: Arial, sans-serif;
-    background-color: hsl(180, 60%, 30%);
+    font-family: Lato, Arial, sans-serif;
     margin: 0;
 
     --left-padding: 1rem;
@@ -9,7 +8,7 @@ html {
     --uploads-dropzone-background: hsl(180, 60%, 25%);
     --input-background-color: hsl(180, 0%, 95%);
 
-    --input-border-color: hsl(180, 0%, 75%);
+    --input-border-color: #bfbfbf;
     --video-border-indicator-color: hsl(270, 80%, 80%);
 
     --link-color     :  hsl(200, 70%, 80%);
@@ -21,7 +20,8 @@ html {
 }
 
 /*basic elements*/
-body { 
+body {
+    background-color: hsl(180, 60%, 30%);
     width: 100%;
 }
 
@@ -120,6 +120,16 @@ ol, ul, menu {
 /*#########################################################################################*/
 /*#########################################################################################*/
 /*specific classes*/
+.video-trimmer{
+  width: 100%;
+  height: 50px;
+}
+
+.page-content {
+  margin-left: 1em;
+  margin-right: 1em;
+}
+
 .paginator {
   display: flex;
   flex-direction: row;
@@ -128,7 +138,6 @@ ol, ul, menu {
 
 .sidebar{
   word-wrap: anywhere;
-  padding-left: 1rem;
   min-width: 250px;
   flex: 0 1 0%;
 }

@@ -18,7 +18,11 @@
         <div class="upload-container">
             <div class="upload-image-container">
                 <img src="{{ thumbnail }}">
-                <span class="text-center">{{ filepath }}</span>
+                <ul class="text-center">
+                    <li>filepath: {{ filepath }}</li>
+                    <li>Media Dimensions: {{media.media_height}}x{{media.media_width}}x{{media.duration}}</li>
+                    <li>Framerate: {{media.framerate}}</li>
+                </ul>
             </div>
             <div class="grid-divider vertical"></div>
             <div class="upload-edit-container">
@@ -62,6 +66,11 @@
                             </div>
                         </div>
                         <div id="tab-panel-2" name="video-editing" class="hidden">
+                            {% if media.duration != 0 %}
+                            <canvas class="video-trimmer" id="video-trimmer"></canvas>
+                            <data id="segment_list" data-marker_times="" data-marker_pos_list=""></data>
+                            <input class="hidden" type="hidden" name="marker_times" id="marker_times_input" value="">
+                            {% endif %}
                         </div>
                     </div>
                     <div class="input hidden">
@@ -78,4 +87,5 @@
     </main>
 </body>
 <script src="/static/tabs.js"></script>
+<script src="/static/video_editor.js"></script>
 </html>

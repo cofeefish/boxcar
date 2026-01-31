@@ -45,7 +45,9 @@ def create_post(method, request_obj: Request, job_id):
     t=database.quicktimer("thumbnail")
     thumbnail = helpers.make_thumbnaill(path.strip("'"), size=(1024,1024), to_link=True)
     t.finish()
-    return render_template('create_post.html',source=source, thumbnail=thumbnail, filepath=path, job_id=job_id, tags=tags)
+
+    media = helpers.get_media_attributes(path.strip("'"))
+    return render_template('create_post.html',source=source, thumbnail=thumbnail, filepath=path, job_id=job_id, tags=tags, media=media)
 
 def finalize_post(method, request_obj: Request):
     form = request_obj.form 
@@ -90,6 +92,10 @@ def edit_post(post_id, request_obj: Request):
     post_obj.tag_string = form.get('tags-input', '')
     post_obj.title = form.get('title-input', '')
     post_obj.description = form.get('description-input', '')
+
+    void, post_trim_in, post_trim_out = form.get('marker_times', '').split(', ')
+    import video_editor
+    video_editor.crop_trim(post_obj.filepath, post_obj.filepath, 0, 0, -1, -1, float(post_trim_in), float(post_trim_out))
 
     post_obj.save()
     media_url = url_for('media', filename=post_obj.filepath)
@@ -136,11 +142,13 @@ def upload(method, request_obj: Request):
         
         if (url != ""):
             filepath=database.temp_dir
-            importer.save_media_from_url(filepath, sources = [url])
+            url_list = url.split(' ')
+            for url in url_list:
+                importer.save_media_from_url(filepath, sources = [url])
         else:
             for file in all_files:
+                #print(f"Uploading file: {file.filename}")
                 database.add_file_to_queue(file)
 
-        #
         return redirect("/queue")
     return redirect("/")
