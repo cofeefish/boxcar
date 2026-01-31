@@ -42,6 +42,12 @@ def edit_post(post_name):   return views.edit_post(post_name, request)
 @app.route('/queue')
 def queue():     return views.queue()
 
+@app.route('/clear_queue', methods=['POST'])
+def clear_queue(): return views.clear_queue()
+
+@app.route('/settings', methods=['GET', "POST"])
+def settings():  return views.settings(request.method, request)
+
 @app.route('/upload', methods=['GET', "POST"])
 def upload():    return views.upload(request.method, request)
 

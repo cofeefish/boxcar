@@ -26,7 +26,12 @@ def escape_str(self: str) -> str:
     escaped = self.replace("&", "&amp;").replace(";", "&lt;").replace(">", "&gt;")
     return escaped
 
+def unescape_str(self: str) -> str:
+    unescaped = self.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+    return unescaped
+
 def get_and_check_response(url, stream = False):
+    url = unescape_str(url)
     try:
         parsed_uri = parse.urlparse(url)
         assert type(parsed_uri) == parse.ParseResult
@@ -54,8 +59,16 @@ def get_and_check_response(url, stream = False):
     else:
         raise RuntimeError(f"182|unable to download file from url: {url}, wrong code recived: {response.status_code}")
 
+
+class urlTreeNode:
+    def __init__(self, url: str):
+        self.url = url
+        self.children = []
+    def add_child(self, child_node):
+        self.children.append(child_node)
+
 #media functions
-def save_media_from_url(path: str, name = "", sources = []):
+def save_media_from_url(path: str, name = "", sources = [], recursive = False):
     '''
     recursively search for and save media files from a url
     
@@ -77,94 +90,101 @@ def save_media_from_url(path: str, name = "", sources = []):
                 return True
         return False
 
-    def save_file_subroutine(path: str, job_id: str, sources: list):
-        filepath = path
-        extension = ""
-        url = str(sources[-1]).strip('#')
-        try:
-            if job_id == "":
-                raise RuntimeError("no job id specified")
-            logging.info(f"**UPLOADER** START|{job_id}|{path}|{source_splitter_str.join(sources)}")
-            parsed_uri = parse.urlparse(url)
-            url_is_valid = True if (
-                parsed_uri.scheme != "" and
-                parsed_uri.netloc != ""
-            ) else False
+    def add_file_to_queue_from_urls(path: str, job_id: str, sources: list):
+        def save_file_subroutine(extension:str, path: str, job_id: str, url:str, sources:list):
+            filepath = f'{path}.{extension}'
+            try:
+                if job_id == "":
+                    raise RuntimeError("no job id specified")
+                logging.info(f"**UPLOADER** START|{job_id}|{path}|{source_splitter_str.join(sources)}")
+                parsed_uri = parse.urlparse(url)
+                url_is_valid = True if (
+                    parsed_uri.scheme != "" and
+                    parsed_uri.netloc != ""
+                ) else False
 
-            if url_is_valid:
-                media_found = False
+                if url_is_valid:
+                    media_found = False
 
-                extension = url.split('.')[-1].lower().split('?')[0]
-                if not ('https://' in url or 'http://' in url):
-                    url = "http://" + url
-                if is_media_url(parsed_uri):
-                    print('media link, downloading directly')
-                    response = get_and_check_response(url, stream=True)
-                    if response == None: 
-                        raise RuntimeError(f"unable to download file from url: {url}, invalid url")
-                    filepath = f'{path}.{extension}'
+                    extension = url.split('.')[-1].lower().split('?')[0]
+                    if not ('https://' in url or 'http://' in url):
+                        url = "http://" + url
+                    if is_media_url(parsed_uri):
+                        print('media link, downloading directly')
+                        response = get_and_check_response(url, stream=True)
+                        if response == None: 
+                            raise RuntimeError(f"unable to download file from url: {url}, invalid url")
 
-                    chunk_size = 2048
-                    total_size = int(response.headers.get('content-length', 0))
-                    bytes_downloaded = 0
-                    
-                    indices = 4
-                    index = 0
-                    if total_size == 0: raise FileNotFoundError('media downloaded is zero bytes')
-                    logging.info(f"**UPLOADER** START-DOWNLOAD|{job_id}|{source_splitter_str.join(sources)}|{total_size}bytes")
-                    z = total_size // (indices + 1)
-                    with open(filepath, 'wb') as media_file:
-                        for chunk in response.iter_content(chunk_size):
-                            media_file.write(chunk)
-                            bytes_downloaded += len(chunk)
-                            new_index = bytes_downloaded // z
-                            if new_index != index:
-                                logging.info(f"**UPLOADER** PROGRESS|{job_id}|{bytes_downloaded}bytes")
-                                index = new_index
-                    media_found = True
+                        chunk_size = 2048
+                        total_size = int(response.headers.get('content-length', 0))
+                        bytes_downloaded = 0
+
+                        indices = 4
+                        index = 0
+                        if total_size == 0: raise FileNotFoundError('media downloaded is zero bytes')
+                        logging.info(f"**UPLOADER** START-DOWNLOAD|{job_id}|{source_splitter_str.join(sources)}|{total_size}bytes")
+                        z = total_size // (indices + 1)
+                        with open(filepath, 'wb') as media_file:
+                            for chunk in response.iter_content(chunk_size):
+                                media_file.write(chunk)
+                                bytes_downloaded += len(chunk)
+                                new_index = bytes_downloaded // z
+                                if new_index != index:
+                                    logging.info(f"**UPLOADER** PROGRESS|{job_id}|{bytes_downloaded}bytes")
+                                    index = new_index
+                        media_found = True
+                    else:
+                        #try to find media in page
+                        response = get_and_check_response(url)
+                        if response == None:
+                            raise RuntimeError(f"unable to download file from url: {url}, invalid url")
+                        html = response.text
+                        media_urls = get_media_urls(html)
+
+                        semaphore = threading.Semaphore(max_workers)
+                        threads = []
+                        for i, sub_url in enumerate(media_urls):
+                            sub_path = f'{path}_{i}'
+                            sub_job_id = f'{job_id}_{i}'
+
+                            sub_sources = sources + [sub_url]
+
+                            def worker(p=sub_path, jid=sub_job_id, sources: list =sub_sources):
+                                try:
+                                    add_file_to_queue_from_urls(p, jid, sources)
+                                finally:
+                                    semaphore.release()
+
+                            semaphore.acquire()
+                            thread = threading.Thread(target = worker)
+                            threads.append(thread)
+                            thread.start()
+
+                    if not media_found:
+                        raise RuntimeError(f"unable to download file from url: {url}, no media found")
                 else:
-                    #try to find media in page
-                    response = get_and_check_response(url)
-                    if response == None:
-                        raise RuntimeError(f"unable to download file from url: {url}, invalid url")
-                    html = response.text
-                    media_urls = get_media_urls(html)
-                    
-                    semaphore = threading.Semaphore(max_workers)
-                    threads = []
-                    for i, sub_url in enumerate(media_urls):
-                        sub_path = f'{path}_{i}'
-                        sub_job_id = f'{job_id}_{i}'
+                    raise RuntimeError("no valid url or file")
 
-                        sub_sources = sources + [sub_url]
-
-                        def worker(p=sub_path, jid=sub_job_id, sources: list =sub_sources):
-                            try:
-                                save_file_subroutine(p, jid, sources)
-                            finally:
-                                semaphore.release()
-
-                        semaphore.acquire()
-                        thread = threading.Thread(target = worker)
-                        threads.append(thread)
-                        thread.start()
-
-                if not media_found:
-                    raise RuntimeError(f"unable to download file from url: {url}, no media found")
-            else:
+                #MOVE FILE TO FINAL LOCATION
+                assert os.path.isfile(filepath), "file not found after download"
+                assert extension != "", "file has no extension"
+                final_path = database.add_file('incomplete', f'{job_id}.{extension}', data=b'')
+                os.replace(filepath, final_path)
+                logging.info(f'**UPLOADER** COMPLETE|{job_id}|{final_path}|post_id')
+            except Exception as e:
+                message = f'**UPLOADER** ERROR|{job_id}|{e}'
+                print(message)
+                logging.error(message)
+        for i, media_pair in enumerate(sources):
+            url, sources = media_pair
+            url = str(url).strip('#')
+            if url == "":
                 raise RuntimeError("no valid url or file")
-            
-            #MOVE FILE TO FINAL LOCATION
-            assert os.path.isfile(filepath), "file not found after download"
-            assert extension != "", "file has no extension"
-            final_path = database.add_file('incomplete', f'{job_id}.{extension}', data=b'')
-            os.replace(filepath, final_path)
-            logging.info(f'**UPLOADER** COMPLETE|{job_id}|{final_path}|post_id')
-        except Exception as e:
-            message = f'**UPLOADER** ERROR|{job_id}|{e}'
-            print(message)
-            logging.error(message)
-    
+            filepath = os.path.join(temp_dir, f'temp_{job_id}')
+            extension = url.split('.')[-1].lower().split('?')[0]
+            save_file_subroutine(extension, path, f'{job_id}_{i}', url, sources)
+        logging.info(f"**UPLOADER** ALL COMPLETE|{job_id}|{path}|{source_splitter_str.join(sources)}")
+
     def get_media_urls(html: str) -> list[str]:
         """Extracts inner HTML of media elements from the provided HTML string."""
         html = re.sub(r'[\n]', ' ', html)#remove new lines
@@ -183,11 +203,118 @@ def save_media_from_url(path: str, name = "", sources = []):
             media_sources.append(media_src)
         return media_sources
 
+    #recursive stuff
+    def get_post_urls(html: str) -> list[str]:
+        """Extracts inner HTML of link elements from the provided HTML string."""
+        html = re.sub(r'[\n]', ' ', html)  # remove new lines
+        pattern = re.compile(r'(<a .*? href="(.*?)".*?>)')
+        post_htmls = [str(''.join(x)) for x in re.findall(pattern, html)]
+
+        post_sources = []
+        for post in post_htmls:
+            post_href = re.search(r'href="(.*?)"', post)
+            if post_href is None:
+                continue
+            post_href = post_href.group(1)
+            post_sources.append(post_href)
+        return post_sources
+
+    def recursive_search_subroutine(url: str, current_depth: int, depth_limit: int, checked_urls: set, path_stack: list):
+        """Recursively build a url tree. Media collection is done after the tree is built."""
+        if current_depth >= depth_limit:
+            return None
+
+        # resolve and normalize the url
+        parsed_uri = parse.urlparse(url)
+        if parsed_uri.scheme == "" or parsed_uri.netloc == "":
+            return None
+
+        # use the full url as the normalized form
+        norm_url = parse.urlunparse(parsed_uri)
+        if norm_url in checked_urls:
+            return None
+        checked_urls.add(norm_url)
+
+        node = urlTreeNode(norm_url)
+
+        try:
+            response = get_and_check_response(norm_url)
+            if response is None:
+                return node
+            html = response.text
+
+            # find linked posts and recurse, resolving relative links
+            post_urls = get_post_urls(html)
+            for post_url in post_urls:
+                full_post = parse.urljoin(norm_url, post_url)
+                child_node = recursive_search_subroutine(full_post, current_depth + 1, depth_limit, checked_urls, path_stack + [full_post])
+                if child_node is not None:
+                    node.add_child(child_node)
+
+        except Exception as e:
+            print(f'error checking url {norm_url}: {e}')
+
+        return node
+
+    def collect_media_pairs_from_tree(root: urlTreeNode) -> list:
+        """Traverse the URL tree, fetch media only for leaf nodes, and return media_pairs.
+
+        Each media_pair is a tuple: (full_media_url, source_path_list)
+        """
+        media_pairs = []
+
+        def dfs(node: urlTreeNode, path: list):
+            '''Depth-first search to collect media URLs from leaf nodes.'''
+            if node is None:
+                return
+            if len(node.children) == 0:
+                try:
+                    response = get_and_check_response(node.url)
+                    if response is None:
+                        return
+                    html = response.text
+                    media_urls = get_media_urls(html)
+                    for m in media_urls:
+                        full_media = parse.urljoin(node.url, m)
+                        media_pairs.append((full_media, path.copy()))
+                except Exception as e:
+                    print(f'error collecting media for {node.url}: {e}')
+            else:
+                for child in node.children:
+                    dfs(child, path + [child.url])
+
+        dfs(root, [root.url])
+        return media_pairs
+
+    depth_limit = 2
     job_id = str(time.time()).replace('.', '')
     name = os.path.basename(path) if name == "" else name
     name = escape_str(name)
 
-    thread = threading.Thread(target = save_file_subroutine, args = (path, job_id, sources))
+    if recursive:
+        checked_urls = set()
+        # build the url tree from the root
+        url_tree = recursive_search_subroutine(sources[0], 0, depth_limit, checked_urls, [sources[0]])
+        if url_tree is None:
+            print(f'no pages found from recursive search of url: {path}')
+            return
+
+        # collect media pairs from leaf nodes of the tree
+        media_pairs = collect_media_pairs_from_tree(url_tree)
+        print(f'recursive search found {len(media_pairs)} media pairs from url: {path}')
+        if len(media_pairs) == 0:
+            print(f'no media found from recursive search of url: {path}')
+            return
+
+        new_path = os.path.join(temp_dir, f'recursive_{job_id}_{name}')
+        thread = threading.Thread(target=add_file_to_queue_from_urls, args=(new_path, job_id, media_pairs))
+    else:
+        # Non-recursive: expect `sources` to be a list of source URLs where the last is the media URL
+        if not isinstance(sources, list) or len(sources) == 0:
+            raise RuntimeError('no valid sources provided for non-recursive download')
+        media_url = sources[-1]
+        media_pairs = [(media_url, sources)]
+        thread = threading.Thread(target=add_file_to_queue_from_urls, args=(path, job_id, media_pairs))
     thread.start()
     return
 
@@ -252,10 +379,10 @@ def get_tags_from_many_url(urls: list[str], end_type:str="str") -> list[str]|str
         return []
 
     assert type(urls) == list, TypeError('url list was not a list')
-    urls = [str(url) for url in urls if str(url)!=""]
+    filtered_urls = [str(url) for url in urls if str(url)!=""]
     #remove suspected media urls to save time:
     urls = [
-        url for url in urls if not (
+        url for url in filtered_urls if not (
             url.split('.')[-1] in image_extensions + video_extensions
         )
     ]
@@ -271,10 +398,6 @@ def get_tags_from_many_url(urls: list[str], end_type:str="str") -> list[str]|str
     if end_type != "list":
         tags = [re.sub(r'\s+', '_', tag) for tag in tags]
         tags = ' '.join(tags)
+    #print(f'found tags: {tags} from urls: {urls}')
     return tags
 
-"""
-import importer
-link = "https://realbooru.com/index.php?page=post&s=view&id=912371"
-importer.get_tags_from_many_url([link])
-"""

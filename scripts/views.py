@@ -15,6 +15,9 @@ def home(method, request_obj: Request):
     
     return render_template("home.html", posts=posts, tag_dict=tag_dict, search=query)
 
+def settings(method, request_obj: Request):
+    return redirect('/', 404)
+
 ####
 def post(post_id):
     #get post obj
@@ -93,9 +96,12 @@ def edit_post(post_id, request_obj: Request):
     post_obj.title = form.get('title-input', '')
     post_obj.description = form.get('description-input', '')
 
-    void, post_trim_in, post_trim_out = form.get('marker_times', '').split(', ')
-    import video_editor
-    video_editor.crop_trim(post_obj.filepath, post_obj.filepath, 0, 0, -1, -1, float(post_trim_in), float(post_trim_out))
+    marker_times= form.get('marker_times', '').split(', ')
+    if len(marker_times) >= 3:
+        post_trim_in = marker_times[1]
+        post_trim_out = marker_times[2]
+        import video_editor
+        video_editor.crop_trim(post_obj.filepath, post_obj.filepath, 0, 0, -1, -1, float(post_trim_in), float(post_trim_out))
 
     post_obj.save()
     media_url = url_for('media', filename=post_obj.filepath)
@@ -116,9 +122,13 @@ def queue():
     t=database.quicktimer("everything else")
     ongoing_uploads = queue["ongoing"]
     assert type(ongoing_uploads) == list
-    recent_items = queue["completed"][-10:][::-1] + queue["errors"][-10:][::-1]
+    recent_items = queue["completed"] + queue["errors"][-10:][::-1]
     t.finish()
     return render_template("queue.html", ongoing = ongoing_uploads, recent_items = recent_items)
+
+def clear_queue():
+    helpers.clear_queue()
+    return redirect('/queue')
 
 def delete_queueitem(method, request_obj: Request):
     request_dict = request_obj.json
@@ -139,12 +149,14 @@ def upload(method, request_obj: Request):
         all_files = request_obj.files.getlist('upload[files][]')
         request_dict = dict(request_obj.form.to_dict(flat=False))
         url = request_dict.get('upload[source]', [""])[0]
-        
+        recursive = request_dict.get('upload[recursive]', ['off'])[0] == 'on'
+        #print(f"Upload request: {len(all_files)} files, url={url}, recursive={recursive}")
+
         if (url != ""):
             filepath=database.temp_dir
             url_list = url.split(' ')
             for url in url_list:
-                importer.save_media_from_url(filepath, sources = [url])
+                importer.save_media_from_url(filepath, sources = [url], recursive=recursive)
         else:
             for file in all_files:
                 #print(f"Uploading file: {file.filename}")

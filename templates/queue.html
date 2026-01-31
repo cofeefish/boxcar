@@ -17,6 +17,7 @@
         </nav>  
     </header>
     <main class="left-padded">
+        <a id="delete" onclick="clear_queue()">clear queue</a>
         <h2> ongoing uploads</h2>
         {% if ongoing|length == 0 %}
             <div class="left-padded">
@@ -147,4 +148,29 @@
             
         }
     }
+
+    async function send_request(){
+        const response = await fetch("/clear_queue", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json; charset=UTF-8"
+            }
+        });
+        if (!response.ok) {
+            const body = await response.text().catch(() => response.statusText);
+            throw new Error('Request failed: ' + response.status + ' ' + body);
+        }
+        return response;
+    }
+    async function clear_queue() {
+        const message = 'clear queue?';
+        if (confirm(message)) {
+            try {
+                await send_request();
+                window.location.href = '/';
+            } catch (err) {
+                alert('Failed to clear queue: ' + err.message);
+            }
+    }
+}
 </script>

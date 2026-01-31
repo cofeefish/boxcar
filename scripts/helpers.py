@@ -465,6 +465,14 @@ def get_queue():
     #[print(x.to_dict()) for x in [*queue['ongoing'], *queue['completed'], *queue['errors']]]
     return queue
 
+def clear_queue():
+    import re
+    #clear log file
+    with open(database.log_path, 'r') as file:
+        filedata = file.read()
+    result = re.sub(r'\n?.*?\*\*UPLOADER\*\*.+', '', filedata)
+    with open(database.log_path, 'w') as file:
+        file.write(result)
 
 def format_size(initial_size: str) -> str:
     import re
