@@ -139,19 +139,28 @@ function unhide_edit(){
 }
 
 async function send_request(post_id){
-    fetch("/delete_post/" + post_id, {
+    const response = await fetch("/delete_post/" + post_id, {
         method: "POST",
         headers: {
-            "Content-type": "application/json; charset=UTF-8"
+            "Content-Type": "application/json; charset=UTF-8"
         }
     });
+    if (!response.ok) {
+        const body = await response.text().catch(() => response.statusText);
+        throw new Error('Request failed: ' + response.status + ' ' + body);
+    }
+    return response;
 }
 async function delete_post() {
     const post_id = document.getElementById("post_id").innerText.split(' ')[1];
-    const message = 'delete post ' + post_id + ' permenatly?';
+    const message = 'delete post ' + post_id + ' permanently?';
     if (confirm(message)) {
-        await send_request(post_id);
-        window.location.href = '/';
+        try {
+            await send_request(post_id);
+            window.location.href = '/';
+        } catch (err) {
+            alert('Failed to delete post: ' + err.message);
+        }
     }
 }
 </script>
