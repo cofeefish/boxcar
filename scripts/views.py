@@ -97,11 +97,15 @@ def edit_post(post_id, request_obj: Request):
     post_obj.description = form.get('description-input', '')
 
     marker_times= form.get('marker_times', '').split(', ')
-    if len(marker_times) >= 3:
+    gain = float(form.get('gain', '1.0'))
+    video_edit_needed = form.get('video_edit', 'false') == 'true'
+    #detect if video edit is needed and valid
+    edit_video = True if (video_edit_needed and len(marker_times) >= 3) else False
+    if edit_video:
         post_trim_in = marker_times[1]
         post_trim_out = marker_times[2]
         import video_editor
-        video_editor.crop_trim(post_obj.filepath, post_obj.filepath, 0, 0, -1, -1, float(post_trim_in), float(post_trim_out))
+        video_editor.crop_trim(post_obj.filepath, post_obj.filepath, 0, 0, -1, -1, float(post_trim_in), float(post_trim_out), gain)
 
     post_obj.save()
     media_url = url_for('media', filename=post_obj.filepath)
@@ -156,7 +160,7 @@ def upload(method, request_obj: Request):
             filepath=database.temp_dir
             url_list = url.split(' ')
             for url in url_list:
-                importer.save_media_from_url(filepath, sources = [url], recursive=recursive)
+                importer.save_media_from_url(filepath, input_url_list = [url], recursive=recursive)
         else:
             for file in all_files:
                 #print(f"Uploading file: {file.filename}")
