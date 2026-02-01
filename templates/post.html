@@ -119,9 +119,18 @@
                         <div id="tab-panel-2" name="video-editing" class="hidden">
                             {% if post.duration != 0 %}
                             <canvas class="video-trimmer" id="video-trimmer"></canvas>
-                            <data id="segment_list" data-marker_times="" data-marker_pos_list=""></data>
+                            <data id="marker_list" data-marker_times="" data-marker_pos_list=""></data>
+                            <canvas class="audio-meter" id="audio-meter-canvas"></canvas>
+                            <span>
+                                <label for="gain-slider">Audio Gain:</label>
+                                <input type="range" min="-65", max="30" name="gain" id="gain-slider" value="0">
+                                <span id="gain-value">0 dB</span>
+                            </span>
+                            <data id="audio-data" data-gain=""></data>
                             {% endif %}
+                            <input class="hidden" type="hidden" name="video_edit" id="video_edit_input" value="">
                             <input class="hidden" type="hidden" name="marker_times" id="marker_times_input" value="">
+                            <input class="hidden" type="hidden" name="marker_times" id="audio_edit_input" value="">
                         </div>
                     </div>
                     <input type="submit" value="submit edit">

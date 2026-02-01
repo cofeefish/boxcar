@@ -68,7 +68,7 @@ class urlTreeNode:
         self.children.append(child_node)
 
 #media functions
-def save_media_from_url(path: str, name = "", sources = [], recursive = False):
+def save_media_from_url(path: str, name = "", input_url_list = [], recursive = False):
     '''
     recursively search for and save media files from a url
     
@@ -90,13 +90,23 @@ def save_media_from_url(path: str, name = "", sources = [], recursive = False):
                 return True
         return False
 
-    def add_file_to_queue_from_urls(path: str, job_id: str, sources: list):
-        def save_file_subroutine(extension:str, path: str, job_id: str, url:str, sources:list):
+    def add_file_to_queue_from_urls(path: str, job_id: str, media_pair_list: list):
+        '''
+        Docstring for add_file_to_queue_from_urls
+        
+        :param path: Description
+        :type path: str
+        :param job_id: Description
+        :type job_id: str
+        :param media_pair_list: Description of list of media pairs (url, path importer traversed)
+        :type media_pair_list: list
+        '''
+        def save_file_subroutine(extension:str, path: str, job_id: str, url:str, parent_sources:list):
             filepath = f'{path}.{extension}'
             try:
                 if job_id == "":
                     raise RuntimeError("no job id specified")
-                logging.info(f"**UPLOADER** START|{job_id}|{path}|{source_splitter_str.join(sources)}")
+                logging.info(f"**UPLOADER** START|{job_id}|{path}|{source_splitter_str.join(parent_sources)}")
                 parsed_uri = parse.urlparse(url)
                 url_is_valid = True if (
                     parsed_uri.scheme != "" and
@@ -106,6 +116,7 @@ def save_media_from_url(path: str, name = "", sources = [], recursive = False):
                 if url_is_valid:
                     media_found = False
 
+                    print(url)
                     extension = url.split('.')[-1].lower().split('?')[0]
                     if not ('https://' in url or 'http://' in url):
                         url = "http://" + url
@@ -122,7 +133,7 @@ def save_media_from_url(path: str, name = "", sources = [], recursive = False):
                         indices = 4
                         index = 0
                         if total_size == 0: raise FileNotFoundError('media downloaded is zero bytes')
-                        logging.info(f"**UPLOADER** START-DOWNLOAD|{job_id}|{source_splitter_str.join(sources)}|{total_size}bytes")
+                        logging.info(f"**UPLOADER** START-DOWNLOAD|{job_id}|{source_splitter_str.join(parent_sources)}|{total_size}bytes")
                         z = total_size // (indices + 1)
                         with open(filepath, 'wb') as media_file:
                             for chunk in response.iter_content(chunk_size):
@@ -147,11 +158,15 @@ def save_media_from_url(path: str, name = "", sources = [], recursive = False):
                             sub_path = f'{path}_{i}'
                             sub_job_id = f'{job_id}_{i}'
 
-                            sub_sources = sources + [sub_url]
+                            print(len(parent_sources))
+                            if len(parent_sources) == 1:
+                                media_pair = (sub_url, [parent_sources[0], sub_url])
+                            else:
+                                media_pair = (sub_url, parent_sources[1] + [sub_url])
 
-                            def worker(p=sub_path, jid=sub_job_id, sources: list =sub_sources):
+                            def worker(p=sub_path, jid=sub_job_id, media_pair=[media_pair]):
                                 try:
-                                    add_file_to_queue_from_urls(p, jid, sources)
+                                    add_file_to_queue_from_urls(p, jid, media_pair)
                                 finally:
                                     semaphore.release()
 
@@ -175,15 +190,16 @@ def save_media_from_url(path: str, name = "", sources = [], recursive = False):
                 message = f'**UPLOADER** ERROR|{job_id}|{e}'
                 print(message)
                 logging.error(message)
-        for i, media_pair in enumerate(sources):
-            url, sources = media_pair
-            url = str(url).strip('#')
-            if url == "":
+        for i, media_pair in enumerate(media_pair_list): 
+            end_url, parent_sources = media_pair
+            end_url = str(end_url).strip('#')
+            if end_url == "":
                 raise RuntimeError("no valid url or file")
             filepath = os.path.join(temp_dir, f'temp_{job_id}')
-            extension = url.split('.')[-1].lower().split('?')[0]
-            save_file_subroutine(extension, path, f'{job_id}_{i}', url, sources)
-        logging.info(f"**UPLOADER** ALL COMPLETE|{job_id}|{path}|{source_splitter_str.join(sources)}")
+            extension = end_url.split('.')[-1].lower().split('?')[0]
+            save_file_subroutine(extension, path, f'{job_id}_{i}', end_url, parent_sources)
+        sources_str_list = [str(media_pair[0]) for media_pair in media_pair_list]
+        logging.info(f"**UPLOADER** ALL COMPLETE|{job_id}|{path}|{source_splitter_str.join(sources_str_list)}")
 
     def get_media_urls(html: str) -> list[str]:
         """Extracts inner HTML of media elements from the provided HTML string."""
@@ -294,7 +310,7 @@ def save_media_from_url(path: str, name = "", sources = [], recursive = False):
     if recursive:
         checked_urls = set()
         # build the url tree from the root
-        url_tree = recursive_search_subroutine(sources[0], 0, depth_limit, checked_urls, [sources[0]])
+        url_tree = recursive_search_subroutine(input_url_list[0], 0, depth_limit, checked_urls, [input_url_list[0]])
         if url_tree is None:
             print(f'no pages found from recursive search of url: {path}')
             return
@@ -310,10 +326,10 @@ def save_media_from_url(path: str, name = "", sources = [], recursive = False):
         thread = threading.Thread(target=add_file_to_queue_from_urls, args=(new_path, job_id, media_pairs))
     else:
         # Non-recursive: expect `sources` to be a list of source URLs where the last is the media URL
-        if not isinstance(sources, list) or len(sources) == 0:
+        if not isinstance(input_url_list, list) or len(input_url_list) == 0:
             raise RuntimeError('no valid sources provided for non-recursive download')
-        media_url = sources[-1]
-        media_pairs = [(media_url, sources)]
+        media_url = input_url_list[-1]
+        media_pairs = [[media_url, input_url_list]]
         thread = threading.Thread(target=add_file_to_queue_from_urls, args=(path, job_id, media_pairs))
     thread.start()
     return

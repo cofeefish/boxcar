@@ -16,7 +16,7 @@ def run_ffmpeg(options: dict):
 def reencode_video():
     pass
 
-def crop_trim(file_in: str, file_out: str, x: int, y: int, width: int, height: int, t_start: float, t_end: float):
+def crop_trim(file_in: str, file_out: str, x: int, y: int, width: int, height: int, t_start: float, t_end: float, gain: float = 1.0) -> int:
     '''
     :param file_in: input filepath
     :type file_in: str
@@ -55,6 +55,7 @@ def crop_trim(file_in: str, file_out: str, x: int, y: int, width: int, height: i
             "-i"     : file_in,
             "-ss"    : t_start,
             "-t"     : t_end-t_start,
+            "-af"    : f"volume={gain}dB",
             ""       : file_out
         }
     else:
@@ -63,6 +64,7 @@ def crop_trim(file_in: str, file_out: str, x: int, y: int, width: int, height: i
             "-ss"    : t_start,
             "-t"     : t_end-t_start,
             "-vf"    : f"crop={width}:{height}:{x}:{y}",
+            "-af"    : f"volume={gain}dB",
             ""       : file_out
         }
     result = run_ffmpeg(options)
