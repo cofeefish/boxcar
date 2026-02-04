@@ -47,6 +47,7 @@ tag_detail_table_preset = {
     "tag_count" : 0
 }
 post_table_preset = {
+    "md5_hashes": [],
     "posts": {},
     "post_count": 0
 }
@@ -136,6 +137,8 @@ def initialize_database(reset=False):
     elif database_structure == 2:
         initialize_binary_tree_database()
 
+    ##
+
 def initialize_monolithic_database():
     #tree = ['posts', 'incomplete', 'thumbnails'] #
     os.makedirs(f'{dataset_dir}/posts', exist_ok=True)
@@ -148,6 +151,14 @@ def initialize_monolithic_database():
 def initialize_static_chunk_database():
     return
 def initialize_binary_tree_database():
+    return
+
+def refresh_database():
+    '''
+    iterate through database and fix/update all posts and tags
+    '''
+    posts = filter_posts("", page=0, num_returned=9999999, fix_posts=True)
+
     return
 ##
 from werkzeug import datastructures
@@ -249,6 +260,9 @@ def add_file(sub_dir: str, filename: str, data: bytes, autopath=True, path="", j
             print(f'error writing file to database: {repr(e)}')
     return final_path
 #
+class HashExistsError(Exception):
+    pass
+
 def add_post_entry(media_path: str, entry: dict):
     '''
     add a post entry to the post table
@@ -259,6 +273,13 @@ def add_post_entry(media_path: str, entry: dict):
     import json
     with open(post_table_path, 'r', encoding='utf-8') as f:
         post_table = json.load(f)
+    post_table = dict(post_table)
+    
+    md5_hash = entry['md5']
+    assert type(md5_hash) == str
+    if md5_hash in post_table['md5_hashes']:
+        raise HashExistsError(f"duplicate md5 hash found when adding post entry: {md5_hash}")
+    post_table['md5_hashes'].append(entry['md5'])
     post_table['posts'].update({str(entry['id']):entry})
     post_table['post_count'] += 1
     with open(post_table_path, 'w', encoding='utf-8') as f:
@@ -290,6 +311,7 @@ def get_post(post_id):
     post_obj = post_class.from_dict(post_dict)
 
     return post_obj
+
 ##
 def filter_posts(query: str, page: int = 0, num_returned: int = posts_per_page, fix_posts=True) -> list:
     '''
@@ -320,10 +342,10 @@ def filter_posts(query: str, page: int = 0, num_returned: int = posts_per_page, 
 
     #get post_table
     with open(post_table_path, 'r', encoding='utf-8') as f:
-        post_table = json.load(f)['posts']
-    assert type(post_table) == dict
-    post_table = list(post_table.values())
-
+        full_post_dict = json.load(f)
+    assert type(full_post_dict) == dict
+    post_table = list(full_post_dict['posts'].values())
+    md5_hashes = list(full_post_dict['md5_hashes'])
     #parse query
     query = query.strip()
     query_list = query.split(' ')
@@ -352,7 +374,8 @@ def filter_posts(query: str, page: int = 0, num_returned: int = posts_per_page, 
         if fix_posts:
             #checks if a post needed fixing, if so, saves it
             new_post_dict = post_obj.to_dict()
-            if post_dict != new_post_dict:
+
+            if (post_dict != new_post_dict) or (post_obj.md5 not in md5_hashes):
                 #print(f'\nold post dict: {post_dict}\nnew post dict: {new_post_dict}\n')
                 post_dict = new_post_dict
                 post_obj.from_dict(post_dict)

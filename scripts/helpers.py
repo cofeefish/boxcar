@@ -1,14 +1,15 @@
-import os, time, subprocess, database
+import os, time, subprocess
+from database import get_setting, quicktimer, refresh_database
 import  logging
 from flask import url_for
 from PIL import Image
 import cv2
 
-dataset_dir = database.dataset_dir
-source_dir = database.source_dir
-temp_dir = database.temp_dir
-post_table_path = database.post_table_path
-
+from database import dataset_dir, source_dir, temp_dir, post_table_path, keep_thumbnails, log_path
+dataset_dir = dataset_dir
+source_dir = source_dir
+temp_dir = temp_dir
+post_table_path = post_table_path
 
 image_extensions = ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'tiff', 'svg', 'gif']
 video_extensions = ['mp4', 'webm', 'avi', 'flv', 'mov', 'wmv', 'mkv', 'm4v', 'mpeg']
@@ -22,29 +23,31 @@ def is_float(string:str) -> bool:
 
 def initialize():
     #verify dataset directory exists
-    database.initialize_database(reset=False)
+    from database import initialize_database
+    initialize_database(reset=False)
+    refresh_database()
     #verify ffmpeg is installed
     out = subprocess.call('ffmpeg -version', shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     if out != 0:
         raise RuntimeError("ffmpeg not found, please install ffmpeg and ensure it is in your system PATH")
 
-dimensions = database.get_setting("thumbnail_width"), database.get_setting("thumbnail_height")
+dimensions = get_setting("thumbnail_width"), get_setting("thumbnail_height")
 def make_thumbnaill(path: str, size:tuple = dimensions , to_link=False, name="", final_ext='png') -> str:
     #check if path is valid first to save time
     if not os.path.isfile(path):
         #print(f'path: {path} while trying to creatye thumbnail')
         return ""
-    t=database.quicktimer("\n\nTHUMBNAIL: import and setup")
+    t=quicktimer("\n\nTHUMBNAIL: import and setup")
     base, ext = os.path.splitext(path)
     ext = ext.lower().strip('.')
     if name == "":
         name = os.path.basename(base)
-    if database.keep_thumbnails == True:
+    if keep_thumbnails == True:
         thumbnail_path = f'{dataset_dir}/thumbnails/{name}.{final_ext}'
     else:
         thumbnail_path = f'{source_dir}/static/temp/{name}_thumbnail.{final_ext}'
     #t.finish()
-    t=database.quicktimer('from video')
+    t=quicktimer('from video')
     if ext.lower() in video_extensions:
         vidcap = cv2.VideoCapture(path)
         success, image = vidcap.read()
@@ -59,7 +62,7 @@ def make_thumbnaill(path: str, size:tuple = dimensions , to_link=False, name="",
         base, ext = os.path.splitext(path)
         ext = ext.lower().strip('.')
     #t.finish()
-    t=database.quicktimer("resize")
+    t=quicktimer("resize")
     if not (ext in image_extensions):
         print(f'error, could not open file {path} to create thumbnail')
         print(ext)
@@ -70,7 +73,10 @@ def make_thumbnaill(path: str, size:tuple = dimensions , to_link=False, name="",
     #t.finish()
 
     if to_link:
-        thumbnail_path = url_for('media', filename=thumbnail_path)
+        try:
+            thumbnail_path = url_for('media', filename=thumbnail_path)
+        except RuntimeError:
+            return "app context not available"
     return thumbnail_path
 
 #
@@ -304,8 +310,8 @@ def delete_queueitem(job_id):
     logging.info(f"**UPLOADER** DELETE_ITEM|{job_id}|")
 
 def get_queue():
-    t=database.quicktimer("parse log")
-    with open(database.log_path, 'r') as file:
+    t=quicktimer("parse log")
+    with open(log_path, 'r') as file:
         filedata = file.read()
     
     events = filedata.split('\n')
@@ -313,7 +319,7 @@ def get_queue():
     t.finish()
 
     event_dicts = []
-    t=database.quicktimer("preprocess")
+    t=quicktimer("preprocess")
     #preprocess event strings
     for event in events:
         date = event.split(' ')[0]
@@ -340,7 +346,7 @@ def get_queue():
         'completed': [],
         'errors': []
     }
-    t=database.quicktimer("collect finished events")
+    t=quicktimer("collect finished events")
     for event in event_dicts:
         #group events by job id, add to unprocessed until completed or error
         event_type = event["event_type"]
@@ -354,7 +360,7 @@ def get_queue():
             image_path = event['details'][0]
             
             thumbnail_path=f'{dataset_dir}/thumbnails/{job_id}.png'
-            if ((database.keep_thumbnails == True) and os.path.isfile(thumbnail_path)):
+            if ((keep_thumbnails == True) and os.path.isfile(thumbnail_path)):
                 thumbnail = url_for('media', filename=thumbnail_path)
             else:   
                 thumbnail = make_thumbnaill(image_path, to_link=True, name=job_id)
@@ -404,7 +410,7 @@ def get_queue():
         elif ((event_type == "finalize") or (event_type == "save_post")):
             pass
     t.finish()
-    t=database.quicktimer("collect unfinished events")
+    t=quicktimer("collect unfinished events")
     for event in queue['unprocessed']:
         job_id = event["job_id"]
         event_type = event["event_type"]
@@ -459,7 +465,10 @@ def get_queue():
 
     queue['ongoing']   = _dedupe_jobs(queue['ongoing'])
     queue['completed'] = _dedupe_jobs(queue['completed'])
+    queue['unprocessed'] = _dedupe_jobs(queue['unprocessed'])
     queue['errors']    = _dedupe_jobs(queue['errors'])
+
+    queue['completed'].sort(key=lambda x: x.end_time, reverse=True)
     #print(queue['ongoing'], '\n', queue['unprocessed'])
      
     #[print(x.to_dict()) for x in [*queue['ongoing'], *queue['completed'], *queue['errors']]]
@@ -468,10 +477,10 @@ def get_queue():
 def clear_queue():
     import re
     #clear log file
-    with open(database.log_path, 'r') as file:
+    with open(log_path, 'r') as file:
         filedata = file.read()
     result = re.sub(r'\n?.*?\*\*UPLOADER\*\*.+', '', filedata)
-    with open(database.log_path, 'w') as file:
+    with open(log_path, 'w') as file:
         file.write(result)
 
 def format_size(initial_size: str) -> str:
@@ -489,8 +498,9 @@ def format_size(initial_size: str) -> str:
     return(f'{round(size,2)}{unit}')
 
 #post functions
+from database import get_next_id, add_file, add_post_entry
 class post:
-    highest_id = int(database.get_next_id())
+    highest_id = int(get_next_id())
     def __init__(self, creation_date=time.time(), modified_date = time.time(), post_id = None,
                 is_hidden = False, parent_id = "", children = [],
                 score = 0, fav = False, views = 0, sources = [], rating = "", tag_string="",
@@ -527,7 +537,10 @@ class post:
         if regenerate_thumbnail:
             thumbnail_path = make_thumbnaill(filepath, name=str(self.id))
         self.thumbnail_path = thumbnail_path
-        self.thumbnail_link = url_for('media', filename=thumbnail_path)
+        try:
+            self.thumbnail_link = url_for('media', filename=thumbnail_path)
+        except RuntimeError:
+            self.thumbnail_link = "app context not available"
         self.deleted = deleted
         #media_stuff
         self.file_ext = file_ext
@@ -606,7 +619,7 @@ class post:
         )
 
         return post_obj
-    def save(self, ignore_media=False):
+    def save(self, ignore_media=None):
         '''
         saves post to post table with it's values
         
@@ -615,22 +628,34 @@ class post:
         #save post media to database
         media_path = self.filepath
         final_path = media_path
+        
+        if self.deleted == True:
+            return
+
+        if (ignore_media == None):
+                ignore_media = False
+        else:
+            ignore_media = bool(ignore_media)
         if ignore_media == False:
             if (not os.path.isfile(media_path)):
                 print(f'error (while saving post), media file not found for post {self.id}: {media_path}')
                 return
-            t=database.quicktimer("get path/name")
-            final_path = database.add_file('posts', f'{self.id}.{self.file_ext}', data = b'', just_path=True)
+            t=quicktimer("get path/name")
+            final_path = add_file('posts', f'{self.id}.{self.file_ext}', data = b'', just_path=True)
             t.finish()
             #print(f'\n\n{media_path} to be named {self.id}.{self.file_ext} -> {final_path}\n\n')
-            t=database.quicktimer("move_file")
+            t=quicktimer("move_file")
             os.replace(media_path, final_path)
             self.filepath = final_path
             t.finish()
         #save post data to database
-        t=database.quicktimer("add to post table")
+        t=quicktimer("add to post table")
         json_data = self.to_dict()
-        database.add_post_entry(final_path, json_data)
+        from database import HashExistsError
+        try:
+            add_post_entry(final_path, json_data)
+        except HashExistsError:
+            print(f'error saving post {self.id}: hash already exists in database')
         t.finish()
         logging.info(f"**UPLOADER** SAVE_POST |{self.job_id}|{media_path}->{self.filepath}|{self.id}")
 
