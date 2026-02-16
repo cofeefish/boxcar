@@ -54,13 +54,13 @@
             <div id="queueitem_{{ item.job_id }}" class="queue-item left-padded">
             <meta id="jinja_data_{{ item.job_id }}" data-time="{{ item.time }}", data-path="{{ item.path }}", data-source="{{ item.source }}">
                 <div class="flex-col">
-                    <h3>{{item.source_printable}}</h3>
-                    <a name="create_link" href="/create_post/{{ item.job_id }}" data-job_id="{{ item.job_id }}">{{ item.job_id }}</a>
+                    <span title="{{item.source}}">source: {{item.source_printable}}</span>
+                    job id: {{ item.job_id }}
                     <img src="{{ item.thumbnail }}" alt="Thumbnail" width="100"></img>
                 </div>
                 <div class="flex-col">
                     <span> &nbsp; </span>
-                    <span>Status: {{ item.status }}</span>
+                    <span>Status: {{ item.status }}{%if item.err_msg != None %}{{item.err_msg }}{%endif%}</span>
                     <span>Date Uploaded: {{ item.date }}</span>
                     <span>Size: {{ item.printable_size }}</span>
                 </div>
@@ -68,9 +68,11 @@
                     <a id="delete_{{ item.job_id }}" class="icon-button" href="#" onclick="deleteitem('{{ item.job_id }}')">
                         <i id="delete_icon_{{ item.job_id }}" class="material-icons">delete</i>
                     </a>
+                    {% if item.status=="complete" %}
                     <a id="add_{{ item.job_id }}" class="icon-button" name="create_link" data-job_id="{{ item.job_id }}" href="/create_post/{{ item.job_id }}">
                         <i id="add_icon_{{ item.job_id }}" class="material-icons">add</i>
                     </a>
+                    {%endif%}
                     <a id="retry_{{ item.job_id }}" class="icon-button" href="/retry/{{ item.job_id }}?time={{ item.date }}{{ item.end_time }}&path='{{ item.path }}'&source='{{ item.source }}'">
                         <i id="retry_icon_{{ item.job_id }}" class="material-icons">replay</i>
                     </a>

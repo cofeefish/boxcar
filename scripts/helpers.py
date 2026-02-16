@@ -272,12 +272,13 @@ class queue_item:
         self.path = ""
         self.thumbnail = ""
         self.status = ""
+        self.err_msg = ""
         self.current_size = ""
     
     def create(
             self, date, start_time, end_time,
             job_id:int, details:list, size:str, path:str, thumbnail,
-            status:str, post_id = None, current_size = ""):
+            status:str, post_id = None, current_size = "", err_msg=None):
         self.date       = date
         self.start_time = start_time
         self.end_time   = end_time
@@ -290,6 +291,7 @@ class queue_item:
         self.path       =    path
         self.thumbnail  = thumbnail
         self.status     = status
+        self.err_msg    = err_msg
         self.post_id    = post_id
         self.current_size = current_size
 
@@ -356,14 +358,17 @@ def get_queue():
     t=quicktimer("collect finished events")
     for event in event_dicts:
         #group events by job id, add to unprocessed until completed or error
-        event_type = event["event_type"]
+        event_type = str(event["event_type"]).lower()
         job_id = event["job_id"]
         full_job = [x for x in queue['unprocessed'] if x["job_id"] == job_id]
+        event_types = [str(x['event_type']).lower() for x in full_job]
         
+        image_path = ""
+        remove_post = False
         if (len(full_job) == 0): continue
 
-        if event_type == "COMPLETE":
-            event_types = [x['event_type'] for x in full_job]
+        if event_type == "complete":
+            event_types = [str(x['event_type']).lower() for x in full_job]
             image_path = event['details'][0]
             
             thumbnail_path=f'{dataset_dir}/thumbnails/{job_id}.png'
@@ -371,16 +376,7 @@ def get_queue():
                 thumbnail = url_for('media', filename=thumbnail_path)
             else:   
                 thumbnail = make_thumbnaill(image_path, to_link=True, name=job_id)
-
-            remove_post = True if (("SAVE_POST" in event_types) or ("DELETE_ITEM" in event_types)) else False
-            if ((thumbnail == "") or remove_post):
-                #remove from queue
-                queue['unprocessed'] = [x for x in queue['unprocessed'] if x["job_id"] != job_id]
-                #delete file
-                if os.path.isfile(image_path):
-                    os.remove(image_path)
-                    pass
-                continue
+            if thumbnail == "": remove_post = True
             #print(thumbnail, '\n\n')
 
             job = queue_item()
@@ -399,8 +395,10 @@ def get_queue():
 
             queue['completed'].append(job)
             queue['unprocessed'] = [x for x in queue['unprocessed'] if x["job_id"] != job_id]
-        elif event_type == "ERROR":
+        elif event_type == "error":
             job = queue_item()
+            
+            err_msg = ', ' + full_job[1]['details'][0].split('|')[-1]
             job.create(
                 date = full_job[0]['date'],
                 start_time = full_job[0]['time'],
@@ -410,12 +408,21 @@ def get_queue():
                 size="0 bytes",
                 path="",
                 thumbnail="",
-                status=event_type)
+                status=event_type,
+                err_msg=err_msg)
 
             queue['errors'].append(job)
             queue['unprocessed'] = [x for x in queue['unprocessed'] if x["job_id"] != job_id]
         elif ((event_type == "finalize") or (event_type == "save_post")):
             pass
+
+        remove_post = True if (("save_post" in event_types) or ("delete_item" in event_types)) else remove_post
+        if (remove_post):
+            #remove from queue
+            queue['unprocessed'] = [x for x in queue['unprocessed'] if x["job_id"] != job_id]
+            #delete file
+            if os.path.isfile(image_path):
+                os.remove(image_path)
     t.finish()
     t=quicktimer("collect unfinished events")
     for event in queue['unprocessed']:

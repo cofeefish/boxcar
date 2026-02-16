@@ -176,7 +176,7 @@ def save_media_from_url(path: str, name = "", input_url_list = [], recursive = F
                             thread.start()
 
                     if not media_found:
-                        raise RuntimeError(f"unable to download file from url: {url}, no media found")
+                        raise RuntimeError(f"unable to download file from url, no media found")
                 else:
                     raise RuntimeError("no valid url or file")
 
