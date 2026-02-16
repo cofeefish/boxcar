@@ -1,8 +1,8 @@
 import os, time, subprocess
-from database import get_setting, quicktimer, refresh_database
+from database import get_setting, quicktimer, refresh_database, clear_folder
 import  logging
 from flask import url_for
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 import cv2
 
 from database import dataset_dir, source_dir, temp_dir, post_table_path, keep_thumbnails, log_path
@@ -31,7 +31,10 @@ def initialize():
     if out != 0:
         raise RuntimeError("ffmpeg not found, please install ffmpeg and ensure it is in your system PATH")
 
-dimensions = get_setting("thumbnail_width"), get_setting("thumbnail_height")
+def pagechange(page_name:str=""):
+    print(f'\n##page change: {page_name}##')
+
+dimensions = (int(get_setting("thumbnail_width", 128)), int(get_setting("thumbnail_height", 128)))
 def make_thumbnaill(path: str, size:tuple = dimensions , to_link=False, name="", final_ext='png') -> str:
     #check if path is valid first to save time
     if not os.path.isfile(path):
@@ -67,9 +70,13 @@ def make_thumbnaill(path: str, size:tuple = dimensions , to_link=False, name="",
         print(f'error, could not open file {path} to create thumbnail')
         print(ext)
         return ""
-    with Image.open(path) as img:
-        img.thumbnail(size)
-        img.save(thumbnail_path)
+    try:
+        with Image.open(path) as img:
+            img.thumbnail(size)
+            img.save(thumbnail_path)
+    except UnidentifiedImageError as e:
+        print(e)
+        return ""
     #t.finish()
 
     if to_link:
@@ -482,6 +489,8 @@ def clear_queue():
     result = re.sub(r'\n?.*?\*\*UPLOADER\*\*.+', '', filedata)
     with open(log_path, 'w') as file:
         file.write(result)
+    #delete files from queue directory
+    clear_folder('queue_storage')
 
 def format_size(initial_size: str) -> str:
     import re

@@ -24,14 +24,58 @@ def get_source_dir():
 
 source_dir = get_source_dir()
 config_path = f'{source_dir}/config.json'
-def get_setting(setting_key:str):
+css_path = f'{source_dir}/static/styles.css'
+def get_all_settings() -> dict:
     with open(config_path) as f:
         config = dict(json.load(f))
+    return config
+
+def get_setting(setting_key:str, default=None):
+    config = get_all_settings()['current']
 
     keys = config.keys()
     if not (setting_key in keys):
+        if default is not None:
+            return default
         raise KeyError(f'setting {setting_key} not in config keys')
     return config[setting_key]
+
+def set_setting(setting_key:str, setting_value=None):
+    with open(config_path) as f:
+        config = dict(json.load(f))
+
+    keys = config['current'].keys()
+    if not (setting_key in keys):
+        raise KeyError(f'setting {setting_key} not in config keys')
+    
+    if setting_value is None:
+        setting_value = config['defaults'].get(setting_key)
+    if setting_value is None:
+        raise ValueError(f'setting_value for {setting_key} is None and no default found')
+    config['current'][setting_key] = setting_value
+
+    with open(config_path, 'w', encoding='utf-8') as f:
+        json.dump(config, f, indent=4)
+
+    css_keys = ["background_color", "text_color", "link_color", "font_size"]
+    #special settings that require more attention
+    if setting_key in ['thumbnail_width', 'thumbnail_height']:
+        clear_folder('thumbnails')
+    elif setting_key in css_keys:
+        #change css
+        with open(css_path, 'r', encoding='utf-8') as f:
+            css=f.read()
+        import re
+        if setting_key == 'background_color':
+            css = re.sub(r'--global-background-color\s*?:.*?;', f'--global-background-color : {setting_value};', css)
+        elif setting_key == 'text_color':
+            css = re.sub(r'--global-text-color\s*?:.*?;', f'--global-text-color : {setting_value};', css)
+        elif setting_key == 'link_color':
+            css = re.sub(r'--link-color\s*?:.*?;', f'--link-color : {setting_value};', css)
+        elif setting_key == "font_size":
+            css = re.sub(r'--base-font-size\s*?:.*?;', f'--base-font-size : {setting_value}px;', css)
+        with open(css_path, 'w', encoding='utf-8') as f:
+            f.write(css)
 
 dataset_dir = get_setting('dataset_path')
 post_table_path = f'{dataset_dir}/post_table.json'
@@ -140,9 +184,9 @@ def initialize_database(reset=False):
     ##
 
 def initialize_monolithic_database():
-    #tree = ['posts', 'incomplete', 'thumbnails'] #
+    #tree = ['posts', 'queue_storage', 'thumbnails'] #
     os.makedirs(f'{dataset_dir}/posts', exist_ok=True)
-    os.makedirs(f'{dataset_dir}/incomplete', exist_ok=True)#for media downloaded but not yet posted
+    os.makedirs(f'{dataset_dir}/queue_storage', exist_ok=True)#for media downloaded but not yet posted
     os.makedirs(f'{dataset_dir}/thumbnails', exist_ok=True)
 
     create_table(post_table_path, post_table_preset)
@@ -160,6 +204,12 @@ def refresh_database():
     posts = filter_posts("", page=0, num_returned=9999999, fix_posts=True)
 
     return
+
+def clear_folder(folder:str):
+    #check if folder is in white list
+    if folder not in ['queue_storage', 'thumbnails']: raise ValueError('unknown folder passed')
+    shutil.rmtree(f'{dataset_dir}/{folder}')
+    initialize_database()
 ##
 from werkzeug import datastructures
 def add_file_to_queue(file: datastructures.FileStorage):
@@ -177,7 +227,7 @@ def add_file_to_queue(file: datastructures.FileStorage):
     msg2 = f'**UPLOADER** START-DOWNLOAD|{job_id}|From_Computer|{filesize}bytes'
     logging.info(msg2)
     
-    final_path = add_file('incomplete', f'{job_id}.{extension}', data=b'')
+    final_path = add_file('queue_storage', f'{job_id}.{extension}', data=b'')
     os.replace(filepath, final_path)
 
     msg3 = f'**UPLOADER** COMPLETE|{job_id}|{final_path}|post_id'
@@ -187,7 +237,7 @@ def add_file(sub_dir: str, filename: str, data: bytes, autopath=True, path="", j
     '''
     adds media file to database
     
-    :param sub_dir: what sub diretory the file belongs in: posts, incomplete, thumbnails
+    :param sub_dir: what sub diretory the file belongs in: posts, queue_storage, thumbnails
     :type sub_dir: str
     :param filename: if filename == auto... :automatically assign a filename
     :type filename: str
@@ -226,9 +276,9 @@ def add_file(sub_dir: str, filename: str, data: bytes, autopath=True, path="", j
     if database_structure == 0:
         #get final path
         if ((autopath) or (path == "")):
-            if not sub_dir in ['posts', 'incomplete', 'thumbnails']:
-                print(f'file_type: {sub_dir}, is unmatched, setting to incomplete')
-                sub_dir = 'incomplete'
+            if not sub_dir in ['posts', 'queue_storage', 'thumbnails']:
+                print(f'file_type: {sub_dir}, is unmatched, setting to queue_storage')
+                sub_dir = 'queue_storage'
             path_head = f'{dataset_dir}/{sub_dir}/'
 
             if autoname:
@@ -434,6 +484,7 @@ class quicktimer:
         '''
         
         spaces = ''.rjust((len(quicktimer.timers)-1)*1)
+        spaces = '   '
 
         import time
         end = time.time()

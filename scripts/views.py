@@ -2,24 +2,41 @@ from flask import render_template, redirect, url_for, Request, Response
 import helpers, database, importer
 
 def home(method, request_obj: Request):
-    print('##################################################')
+    helpers.pagechange("home page")
     t=database.quicktimer('time')
     query = request_obj.args.get('query', "")
     page = int(request_obj.args.get('page', 0))
-    posts = database.filter_posts(query, page)
+    posts_per_page = int(database.get_setting('posts_per_page'))
+
+    posts = database.filter_posts(query, page, num_returned=posts_per_page)
 
     tag_dict = helpers.tag_summary(posts)
     tag_dict = [(key, value) for key, value in tag_dict.items()][:20]
     time = t.finish()
-    database.log_info("statisticts", {"event_type":"home_page_call","time":time,"query":query})
-    
+    database.log_info("statistics", {"event_type":"home_page_call","time":time,"query":query})
+
     return render_template("home.html", posts=posts, tag_dict=tag_dict, search=query)
 
 def settings(method, request_obj: Request):
-    return redirect('/', 404)
+    helpers.pagechange("settings page")
+    settings = database.get_all_settings()['current']
+    return render_template("settings.html", settings=settings)
+
+def change_settings(request_obj: Request):
+    form = request_obj.form
+    print(dict(form))
+    for key in form.keys():
+        value = form.get(key)
+        database.set_setting(key, value)
+    return redirect('/settings')
+
+def reset_setting(setting:str):
+    database.set_setting(setting, None)
+    return redirect('/settings')
 
 ####
 def post(post_id):
+    helpers.pagechange("post page")
     #get post obj
     post_obj = database.get_post(post_id)
     if post_obj == None:
@@ -31,6 +48,7 @@ def post(post_id):
     return render_template("post.html", post=post_obj, media_url=media_url)
 
 def create_post(method, request_obj: Request, job_id):
+    helpers.pagechange("create post page")
     #edit page for creating post from queue item
     args = request_obj.args
     path = args.get('path')
@@ -53,6 +71,7 @@ def create_post(method, request_obj: Request, job_id):
     return render_template('create_post.html',source=source, thumbnail=thumbnail, filepath=path, job_id=job_id, tags=tags, media=media)
 
 def finalize_post(method, request_obj: Request):
+    helpers.pagechange("finalize post")
     form = request_obj.form 
     t=database.quicktimer("make post obj")
     post_obj = helpers.post(
@@ -78,6 +97,7 @@ def finalize_post(method, request_obj: Request):
     return redirect('posts/' + str(post_obj.id))
 
 def edit_post(post_id, request_obj: Request):
+    helpers.pagechange("edit post")
     post_obj = database.get_post(post_id)
     assert post_obj != None
 
@@ -120,6 +140,7 @@ def delete_post(post_id):
 
 ####
 def queue():
+    helpers.pagechange("queue page")
     t=database.quicktimer("get queue")
     queue = helpers.get_queue()
     t.finish()
@@ -144,6 +165,7 @@ def delete_queueitem(method, request_obj: Request):
     return str(False)
 
 def upload(method, request_obj: Request):
+    helpers.pagechange("upload page")
     if method == "GET":
         return render_template("upload_start.html")
     elif method == "POST":

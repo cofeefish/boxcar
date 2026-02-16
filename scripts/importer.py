@@ -183,7 +183,7 @@ def save_media_from_url(path: str, name = "", input_url_list = [], recursive = F
                 #MOVE FILE TO FINAL LOCATION
                 assert os.path.isfile(filepath), "file not found after download"
                 assert extension != "", "file has no extension"
-                final_path = database.add_file('incomplete', f'{job_id}.{extension}', data=b'')
+                final_path = database.add_file('queue_storage', f'{job_id}.{extension}', data=b'')
                 os.replace(filepath, final_path)
                 logging.info(f'**UPLOADER** COMPLETE|{job_id}|{final_path}|post_id')
             except Exception as e:
@@ -302,7 +302,7 @@ def save_media_from_url(path: str, name = "", input_url_list = [], recursive = F
         dfs(root, [root.url])
         return media_pairs
 
-    depth_limit = 2
+    depth_limit = int(database.get_setting('recursive_upload_depth', 2))
     job_id = str(time.time()).replace('.', '')
     name = os.path.basename(path) if name == "" else name
     name = escape_str(name)

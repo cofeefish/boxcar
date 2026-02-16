@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" type="text/css" href="/static/styles.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    <title>Settings</title>
+</head>
+<body>
+    <header>
+        <h1 class="left-padded">Boxcar</h1>
+        <nav>
+            <menu class="left-padded">
+                <a href="/">Home</a>
+                <a href="/queue">Upload Queue</a>
+                <a href="/settings">Settings</a>
+            </menu>
+        </nav>  
+    </header>
+    <main class="page-content">
+        <div class="flex-row ">
+            <h2>Settings</h2>
+            <hr>
+            <div class="tab-list">
+                <a href="#" onclick="switchTab(0)" id="tab-selector-0" class="tab active" >General</a>
+                <a href="#" onclick="switchTab(1)" id="tab-selector-1" class="tab " >Upload</a>
+                <a href="#" onclick="switchTab(2)" id="tab-selector-2" class="tab " >Database</a>
+                <a href="#" onclick="switchTab(3)" id="tab-selector-3" class="tab " >Appearance</a>
+            </div>
+        </div>
+        <form class="tab-panels" id="settings_form" action="/change_settings" method="post">
+
+            <div id="tab-panel-0" name="general-panel">
+                <h3>General Settings</h3>
+                <ul class="settings-list">
+                    <li><button onclick="clearTerminal()">clear terminal</button></li>
+                    <li>posts per page <input type="number" name="posts_per_page" id="posts_per_page" value="{{settings['posts_per_page']}}">
+                        <a href="/reset_setting/posts_per_page" class="icon-button"> <i class="material-icons">refresh</i></a></li>
+                    <li>thumbnail width <input type="number" name="thumbnail_width" id="thumbnail_width" value="{{settings['thumbnail_width']}}">
+                    <a href="/reset_setting/thumbnail_width" class="icon-button"> <i class="material-icons">refresh</i></a></li>
+                    <li>thumbnail height <input type="number" name="thumbnail_height" id="thumbnail_height" value="{{settings['thumbnail_height']}}">
+                    <a href="/reset_setting/thumbnail_height" class="icon-button"> <i class="material-icons">refresh</i></a></li>
+                </ul>
+            </div>
+
+            <div id="tab-panel-1" name="upload-panel" class="hidden">
+                <h3>Upload Settings</h3>
+                <ul class="settings-list">
+                    <li>recursive upload depth <input type="number" name="recursive_upload_depth" id="recursive_upload_depth" value="{{settings['recursive_upload_depth']}}"></li>
+                </ul>
+            </div>
+
+            <div id="tab-panel-2" name="database-panel" class="hidden">
+                <h3>Database Settings</h3>
+                <ul class="settings-list">
+                    <li>database path <input type="text" name="dataset_path" id="dataset_path" value="{{settings['dataset_path']}}">
+                    <a href="/reset_setting/dataset_path" class="icon-button"> <i class="material-icons">refresh</i></a></li>
+                </ul>
+            </div>
+
+            <div id="tab-panel-3" name="appearance-panel" class="hidden">
+                <h3>Appearance Settings</h3>
+                <ul class="settings-list"></ul>
+                <ul class="settings-list">
+                    <li>background color <input type="text" name="background_color" id="background_color" value="{{settings['background_color']}}">
+                    <a href="/reset_setting/background_color" class="icon-button"> <i class="material-icons">refresh</i></a></li>
+                    <li>text color <input type="text" name="text_color" id="text_color" value="{{settings['text_color']}}">
+                    <a href="/reset_setting/text_color" class="icon-button"> <i class="material-icons">refresh</i></a></li>
+                    <li>link color <input type="text" name="link_color" id="link_color" value="{{settings['link_color']}}">
+                    <a href="/reset_setting/link_color" class="icon-button"> <i class="material-icons">refresh</i></a></li>
+                    <li>font size <input type="text" name="font_size" id="font_size" value="{{settings['font_size']}}">
+                    <a href="/reset_setting/font_size" class="icon-button"> <i class="material-icons">refresh</i></a></li>
+                </ul>
+            </div>
+
+            <hr>
+            <input type="submit" value="Save Settings">
+        </form>
+    </main>
+<script src="/static/tabs.js"></script>
+<script>
+    function clearTerminal() {
+        fetch('/clear_terminal', { method: 'POST' })
+            .then(response => {
+                if (response.ok) {
+                    alert('Terminal cleared successfully.');
+                } else {
+                    alert('Failed to clear terminal.');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while clearing the terminal.');
+            });
+    }
+</script>
+</html>

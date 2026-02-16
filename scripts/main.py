@@ -17,6 +17,9 @@ def media(filename:str):
     #print(filename)
     return send_file(filename)
 
+@app.route('/clear_terminal', methods=['POST'])
+def clear_terminal(): os.system('cls' if os.name == 'nt' else 'clear') ; return ''
+
 @app.route('/delete_queueitem', methods=['POST'])
 def delete_queueitem(): return views.delete_queueitem(request.method, request)
 #
@@ -47,6 +50,12 @@ def clear_queue(): return views.clear_queue()
 
 @app.route('/settings', methods=['GET', "POST"])
 def settings():  return views.settings(request.method, request)
+
+@app.route('/change_settings', methods=['POST'])
+def change_settings(): return views.change_settings(request)
+
+@app.route('/reset_setting/<setting>')
+def reset_setting(setting): return views.reset_setting(setting)
 
 @app.route('/upload', methods=['GET', "POST"])
 def upload():    return views.upload(request.method, request)

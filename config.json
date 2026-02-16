@@ -1,6 +1,24 @@
 {
-    "posts_per_page" : 20,
-    "thumbnail_width" : 256,
-    "thumbnail_height" : 256,
-    "dataset_path" : "C:/TrimKey/bosset"
+    "current": {
+        "posts_per_page": "20",
+        "thumbnail_width": "256",
+        "thumbnail_height": "256",
+        "dataset_path": "C:/TrimKey/bosset",
+        "recursive_upload_depth": "1",
+        "background_color": "#1F7A7A",
+        "text_color": "#000000",
+        "link_color": "#A8D8F0",
+        "font_size": "16"
+    },
+    "defaults": {
+        "posts_per_page": "20",
+        "thumbnail_width": "256",
+        "thumbnail_height": "256",
+        "dataset_path": "C:/TrimKey/bosset",
+        "recursive_upload_depth": "1",
+        "background_color": "#1F7A7A",
+        "text_color": "#000000",
+        "link_color": "#A8D8F0",
+        "font_size": "16"
+    }
 }
