@@ -59,11 +59,13 @@
             </ul>
         </aside>
         <section class="flex-col">
+            <canvas class="media-canvas" id="media-canvas" name="media_canvas"></canvas>
             {% if post.file_type == "video" %}
             <video id="video" class="post-media" src="{{ media_url }}" alt="media" controls></video>
             {% else %}
             <img   class="post-media" src="{{ media_url }}" alt="media" >
             {% endif %}
+            <data id="crop-data" data-crop_x="0" data-crop_y="0" data-crop_width="Infinity" data-crop_height="Infinity"></data>
             <span>
                 <button onclick="unhide_edit()">Edit</button>
                 <a title="not implemented">Reimport tags</a>
@@ -131,6 +133,7 @@
                             <input class="hidden" type="hidden" name="video_edit" id="video_edit_input" value="">
                             <input class="hidden" type="hidden" name="marker_times" id="marker_times_input" value="">
                             <input class="hidden" type="hidden" name="marker_times" id="audio_edit_input" value="">
+                            <input class="hidden" type="hidden" name="crop_values" id="crop_input" value="">
                         </div>
                     </div>
                     <input type="submit" value="submit edit">

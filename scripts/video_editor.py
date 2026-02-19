@@ -16,7 +16,8 @@ def run_ffmpeg(options: dict):
 def reencode_video():
     pass
 
-def crop_trim(file_in: str, file_out: str, x: int, y: int, width: int, height: int, t_start: float, t_end: float, gain: float = 1.0) -> int:
+def crop_trim(file_in: str, file_out: str, x: int|None, y: int|None, width: int|None, height: int|None,
+               t_start: float|None, t_end: float|None, gain: float = 1.0) -> int:
     '''
     :param file_in: input filepath
     :type file_in: str
@@ -50,19 +51,40 @@ def crop_trim(file_in: str, file_out: str, x: int, y: int, width: int, height: i
     file_in  = '"' + file_in + '"'
     file_out = '"' + file_out + '"'
 
-    if width == -1 or height == -1:
+    crop = True if (all([x!=None for x in [x, y, width, height]])) else False
+    trim = True if (t_start!=None and t_end != None) else False
+
+    options = {}
+    if ( (not crop) and (not trim) ):
+        #no crop, no trim
         options = {
             "-i"     : file_in,
-            "-ss"    : t_start,
-            "-t"     : t_end-t_start,
             "-af"    : f"volume={gain}dB",
             ""       : file_out
         }
-    else:
+    elif ( (crop) and (not trim) ):
+          #crop, no trim
+        options = {
+            "-i"     : file_in,
+            "-vf"    : f"crop={width}:{height}:{x}:{y}",
+            "-af"    : f"volume={gain}dB",
+            ""       : file_out
+        }
+    elif ( (not crop) and (trim) ):
+        #no crop, trim
         options = {
             "-i"     : file_in,
             "-ss"    : t_start,
-            "-t"     : t_end-t_start,
+            "-t"     : t_end-t_start, # type: ignore
+            "-af"    : f"volume={gain}dB",
+            ""       : file_out
+        }
+    elif ( crop and trim ):
+        #crop + trim
+        options = {
+            "-i"     : file_in,
+            "-ss"    : t_start,
+            "-t"     : t_end-t_start, # type: ignore
             "-vf"    : f"crop={width}:{height}:{x}:{y}",
             "-af"    : f"volume={gain}dB",
             ""       : file_out

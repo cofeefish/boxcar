@@ -116,16 +116,27 @@ def edit_post(post_id, request_obj: Request):
     post_obj.title = form.get('title-input', '')
     post_obj.description = form.get('description-input', '')
 
-    marker_times= form.get('marker_times', '').split(', ')
+    marker_times = form.get('marker_times', '').split(', ')
     gain = float(form.get('gain', '1.0'))
+    crop_values = form.get('crop_values', None)
+
     video_edit_needed = form.get('video_edit', 'false') == 'true'
     #detect if video edit is needed and valid
-    edit_video = True if (video_edit_needed and len(marker_times) >= 3) else False
-    if edit_video:
-        post_trim_in = marker_times[1]
-        post_trim_out = marker_times[2]
+    if video_edit_needed:
+        if len(marker_times) < 3:
+            post_trim_in = None
+            post_trim_out = None
+        else:
+            post_trim_in   =  float(marker_times[1])
+            post_trim_out  =  float(marker_times[2])
+        if crop_values == None:
+            crop_x = crop_y = crop_width = crop_height = None
+        else:
+            crop_x, crop_y, crop_width, crop_height = [int(float(x)) for x in crop_values.split(',')]
+            print(crop_x, crop_y, crop_width, crop_height)
+
         import video_editor
-        video_editor.crop_trim(post_obj.filepath, post_obj.filepath, 0, 0, -1, -1, float(post_trim_in), float(post_trim_out), gain)
+        video_editor.crop_trim(post_obj.filepath, post_obj.filepath, crop_x, crop_y, crop_width, crop_height, post_trim_in, post_trim_out, gain)
 
     post_obj.save()
     media_url = url_for('media', filename=post_obj.filepath)
