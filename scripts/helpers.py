@@ -644,9 +644,6 @@ class post:
         #save post media to database
         media_path = self.filepath
         final_path = media_path
-        
-        if self.deleted == True:
-            return
 
         if (ignore_media == None):
                 ignore_media = False
@@ -667,19 +664,26 @@ class post:
         #save post data to database
         t=quicktimer("add to post table")
         json_data = self.to_dict()
+        print(json_data)
         from database import HashExistsError
         try:
-            add_post_entry(final_path, json_data)
+            add_post_entry(final_path, json_data, check_hash=not ignore_media)
         except HashExistsError:
-            print(f'error saving post {self.id}: hash already exists in database')
+            pass
+            #print(f'error saving post {self.id}: hash already exists in database')
         t.finish()
+        print(f'post {self.id} saved successfully')
         logging.info(f"**UPLOADER** SAVE_POST |{self.job_id}|{media_path}->{self.filepath}|{self.id}")
 
     def delete(self):
+        if self.deleted == True:
+            print(f'post {self.id} already deleted')
+            return
         print(f'deleting post: {self.id}')
         media_path = self.filepath
-        os.remove(media_path)
-        os.remove(self.thumbnail_path)
+        if os.path.isfile(media_path) == True:
+            os.remove(media_path)
+            os.remove(self.thumbnail_path)
         self.deleted = True
         self.save(ignore_media=True)
 

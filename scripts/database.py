@@ -313,7 +313,7 @@ def add_file(sub_dir: str, filename: str, data: bytes, autopath=True, path="", j
 class HashExistsError(Exception):
     pass
 
-def add_post_entry(media_path: str, entry: dict):
+def add_post_entry(media_path: str, entry: dict, check_hash=True):
     '''
     add a post entry to the post table
 
@@ -327,7 +327,7 @@ def add_post_entry(media_path: str, entry: dict):
     
     md5_hash = entry['md5']
     assert type(md5_hash) == str
-    if md5_hash in post_table['md5_hashes']:
+    if (md5_hash in post_table['md5_hashes']) and check_hash:
         raise HashExistsError(f"duplicate md5 hash found when adding post entry: {md5_hash}")
     post_table['md5_hashes'].append(entry['md5'])
     post_table['posts'].update({str(entry['id']):entry})

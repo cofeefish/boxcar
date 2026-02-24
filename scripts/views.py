@@ -8,7 +8,7 @@ def home(method, request_obj: Request):
     page = int(request_obj.args.get('page', 0))
     posts_per_page = int(database.get_setting('posts_per_page'))
 
-    posts = database.filter_posts(query, page, num_returned=posts_per_page)
+    posts = database.filter_posts(query, page, num_returned=posts_per_page, fix_posts=False)
 
     tag_dict = helpers.tag_summary(posts)
     tag_dict = [(key, value) for key, value in tag_dict.items()][:20]
@@ -39,7 +39,7 @@ def post(post_id):
     helpers.pagechange("post page")
     #get post obj
     post_obj = database.get_post(post_id)
-    if post_obj == None:
+    if (post_obj == None) or (post_obj.deleted == True):
         return redirect('/')
     elif type(post_obj) != helpers.post:
         raise TypeError(f'post_obj {post_obj} != helpers.post')
