@@ -47,6 +47,8 @@
                 <h3>Upload Settings</h3>
                 <ul class="settings-list">
                     <li>recursive upload depth <input type="number" name="recursive_upload_depth" id="recursive_upload_depth" value="{{settings['recursive_upload_depth']}}"></li>
+                    <li>use yt_dlp for url downloads <input type="checkbox" name="use_ytdlp" id="use_ytdlp" {% if settings['use_ytdlp'] %}checked{% endif %}>
+                    <a href="/reset_setting/use_ytdlp" class="icon-button"> <i class="material-icons">refresh</i></a></li>
                 </ul>
             </div>
 

@@ -2,6 +2,12 @@ import requests, os, logging, re, time, threading
 import database
 import urllib.parse as parse
 
+ytdlp = False
+use_ytdlp = database.get_setting('use_ytdlp', False)
+if use_ytdlp:
+    ytdlp_blacklist = ['danbooru', 'donmai']
+    import yt_dlp as ytdlp
+
 #project wide vars
 dataset_dir = database.dataset_dir
 source_dir = database.source_dir
@@ -101,8 +107,8 @@ def save_media_from_url(path: str, name = "", input_url_list = [], recursive = F
         :param media_pair_list: Description of list of media pairs (url, path importer traversed)
         :type media_pair_list: list
         '''
-        def save_file_subroutine(extension:str, path: str, job_id: str, url:str, parent_sources:list):
-            filepath = f'{path}.{extension}'
+        def save_file_subroutine(extension:str|None, path: str, job_id: str, url:str, parent_sources:list):
+            filepath = f'{path}.{extension}' if extension else path
             try:
                 if job_id == "":
                     raise RuntimeError("no job id specified")
@@ -116,11 +122,33 @@ def save_media_from_url(path: str, name = "", input_url_list = [], recursive = F
                 if url_is_valid:
                     media_found = False
 
-                    print(url)
                     extension = url.split('.')[-1].lower().split('?')[0]
                     if not ('https://' in url or 'http://' in url):
                         url = "http://" + url
-                    if is_media_url(parsed_uri):
+                    print([(x, url, x not in url) for x in ytdlp_blacklist])
+                    if use_ytdlp and all([x not in url for x in ytdlp_blacklist]):
+                        ytdlp_opts = {
+                            'outtmpl': filepath,
+                            'quiet': True,
+                            'no_warnings': True,
+                            'ignoreerrors': True,
+                            'noplaylist': True
+                        }
+                        assert type(ytdlp) != bool, "yt_dlp failed to import"
+                        with ytdlp.YoutubeDL(ytdlp_opts) as ydl: #type: ignore
+                            try:
+                                info = ydl.extract_info(url, download=True)
+                                extension = info.get('ext', '')
+                                print(filepath, extension)
+                                if extension and os.path.exists(filepath):
+                                    downloaded_file = f'{filepath}.{extension}'
+                                    if os.path.exists(downloaded_file):
+                                        filepath = downloaded_file
+                                media_found = True
+                            except Exception as e:
+                                print(f'ytdlp failed to download media from url: {url}, error: {e}')
+
+                    elif is_media_url(parsed_uri):
                         print('media link, downloading directly')
                         response = get_and_check_response(url, stream=True)
                         if response == None: 
@@ -190,6 +218,7 @@ def save_media_from_url(path: str, name = "", input_url_list = [], recursive = F
                 message = f'**UPLOADER** ERROR|{job_id}|{e}'
                 print(message)
                 logging.error(message)
+
         for i, media_pair in enumerate(media_pair_list): 
             end_url, parent_sources = media_pair
             end_url = str(end_url).strip('#')
@@ -197,7 +226,8 @@ def save_media_from_url(path: str, name = "", input_url_list = [], recursive = F
                 raise RuntimeError("no valid url or file")
             filepath = os.path.join(temp_dir, f'temp_{job_id}')
             extension = end_url.split('.')[-1].lower().split('?')[0]
-            save_file_subroutine(extension, path, f'{job_id}_{i}', end_url, parent_sources)
+            if '/' in extension or len(extension) > 5: extension = None
+            save_file_subroutine(extension, filepath, f'{job_id}_{i}', end_url, parent_sources)
         sources_str_list = [str(media_pair[0]) for media_pair in media_pair_list]
         logging.info(f"**UPLOADER** ALL COMPLETE|{job_id}|{path}|{source_splitter_str.join(sources_str_list)}")
 
@@ -306,6 +336,7 @@ def save_media_from_url(path: str, name = "", input_url_list = [], recursive = F
     job_id = str(time.time()).replace('.', '')
     name = os.path.basename(path) if name == "" else name
     name = escape_str(name)
+    print(f'name: {name}, path: {path}, input_url_list: {input_url_list}, recursive: {recursive}')
 
     if recursive:
         checked_urls = set()
