@@ -60,6 +60,9 @@ def reset_setting(setting): return views.reset_setting(setting)
 @app.route('/upload', methods=['GET', "POST"])
 def upload():    return views.upload(request.method, request)
 
+@app.route('/statistics')
+def statistics(): return views.statistics()
+
 ############################################
 
 if __name__ == '__main__':

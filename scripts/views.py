@@ -34,6 +34,11 @@ def reset_setting(setting:str):
     database.set_setting(setting, None)
     return redirect('/settings')
 
+def statistics():
+    helpers.pagechange("statistics page")
+    stats = helpers.get_statistics()
+    return render_template("statistics.html", stats=stats)
+
 ####
 def post(post_id):
     helpers.pagechange("post page")
@@ -129,7 +134,7 @@ def edit_post(post_id, request_obj: Request):
         else:
             post_trim_in   =  float(marker_times[1])
             post_trim_out  =  float(marker_times[2])
-        if crop_values == None:
+        if (crop_values == None) or (crop_values.strip() == ""):
             crop_x = crop_y = crop_width = crop_height = None
         else:
             crop_x, crop_y, crop_width, crop_height = [int(float(x)) for x in crop_values.split(',')]

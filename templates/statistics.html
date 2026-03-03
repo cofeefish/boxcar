@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="stylesheet" type="text/css" href="/static/styles.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    <title>Statistics</title>
+</head>
+<body>
+    <header>
+        <h1 class="left-padded">Boxcar</h1>
+        <nav>
+            <menu class="left-padded">
+                <a href="/">Home</a>
+                <a href="/queue">Upload Queue</a>
+                <a href="/settings">Settings</a>
+                <a href="/statistics">Statistics</a>
+            </menu>
+        </nav>
+    </header>
+    <main class="page-content">
+        <h2>Statistics</h2>
+        <hr>
+        <ol class="statistics-container">
+            <li><h3>Total Posts</h3>
+            <p>{{stats['total_posts']}}</p></li>
+            <li><h3>Total Filesize</h3>
+            <p>{{stats['total_filesize']}}</p></li>
+            <li><h3>Average Filesize</h3>
+            <p>{{stats['average_filesize']}}</p></li>
+        </ol>
+    </main>
+</body>
+</html>

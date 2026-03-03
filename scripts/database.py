@@ -417,7 +417,7 @@ def filter_posts(query: str, page: int = 0, num_returned: int = posts_per_page, 
 
     post_table.reverse()
     for post_dict in post_table:
-        if len(matched_posts) >= required_posts:
+        if (len(matched_posts) >= required_posts) and (num_returned != -1):
             break
         #load post
         post_obj = post_class.from_dict(post_dict)

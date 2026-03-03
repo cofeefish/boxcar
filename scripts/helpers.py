@@ -87,6 +87,24 @@ def make_thumbnaill(path: str, size:tuple = dimensions , to_link=False, name="",
     return thumbnail_path
 
 #
+def get_statistics():
+    from database import filter_posts
+    posts = filter_posts("", fix_posts=False, num_returned=-1)
+    database_size = sum([post.file_size for post in posts if post.file_size != None])
+    stats = {
+        'total_posts': len(posts),
+        'total_filesize': format_size(str(database_size)),
+        'average_filesize': format_size(str(database_size / len(posts))) if len(posts) > 0 else 0,
+        'total_views': 0,
+        'average_views': 0,
+        'total_score': 0,
+        'average_score': 0,
+        'rating_distribution': {},
+        'tag_summary': {}
+    }
+
+    return stats
+#
 def get_similarity(str1:str, str2:str, match_case=True) -> int:
     '''
     get edit (Damerau-Levenshtein) distance between two strings
