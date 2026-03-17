@@ -9,7 +9,7 @@
         "text_color": "#000000",
         "link_color": "#A8D8F0",
         "font_size": "16",
-        "use_ytdlp":true
+        "use_ytdlp": true
     },
     "defaults": {
         "posts_per_page": "20",
@@ -21,6 +21,6 @@
         "text_color": "#000000",
         "link_color": "#A8D8F0",
         "font_size": "16",
-        "use_ytdlp":false
+        "use_ytdlp": false
     }
 }

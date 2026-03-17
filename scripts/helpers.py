@@ -233,30 +233,33 @@ def get_media_attributes(path: str) -> dict:
             cmd = ['ffprobe', '-v', 'error',
                     '-select_streams', 'v:0',
                     '-show_entries', 'stream=width,height,duration,nb_frames,r_frame_rate',
-                    '-of', 'default=noprint_wrappers=1:nokey=1',
+                    '-of', 'default=noprint_wrappers=1',
                     path]
             result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             output = result.stdout.splitlines()
-            width = int(output[0])
-            height = int(output[1])
-
-            duration_str = str(output[2])
-            if is_float(duration_str):
-                duration = float(duration_str)
-            else:
-                duration = -1
-
-
-            nb_frames = int(float(output[3])) if is_float(output[3]) else 0
-            framerate_str = output[4]
-            if is_float(framerate_str):
-                framerate = float(framerate_str)
-            else:
-                framerate = -1
-                if '/' in framerate_str:
-                    num, denom = framerate_str.split('/')
-                    if ((is_float(num)) and (is_float(denom))):
-                        framerate = float(num) / float(denom) if float(denom) != 0 else 0.0
+            #order of output depends on ffprobe version and media type
+            width, height, duration, nb_frames, framerate = None, None, None, None, None
+            for line in output:
+                if line.startswith('width='):
+                    width = line.split('=')[1]
+                elif line.startswith('height='):
+                    height = line.split('=')[1]
+                elif line.startswith('duration='):
+                    duration_str = line.split('=')[1]
+                    duration = round(float(duration_str), 2) if is_float(duration_str) else -1
+                elif line.startswith('nb_frames='):
+                    nb_frames_str = line.split('=')[1]
+                    nb_frames = int(float(nb_frames_str)) if is_float(nb_frames_str) else 0
+                elif line.startswith('r_frame_rate='):
+                    framerate_str = line.split('=')[1]
+                    if is_float(framerate_str):
+                        framerate = round(float(framerate_str), 2)
+                    else:                
+                        framerate = -1
+                        if '/' in framerate_str:
+                            frames, fps = framerate_str.split('/')
+                            if ((is_float(frames)) and (is_float(fps))):
+                                framerate = round(float(frames) / float(fps), 2) if float(fps) != 0 else 0.0
 
             with open(path, 'rb') as afile:
                 buf = afile.read()
