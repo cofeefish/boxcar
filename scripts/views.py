@@ -15,7 +15,7 @@ def home(method, request_obj: Request):
     time = t.finish()
     database.log_info("statistics", {"event_type":"home_page_call","time":time,"query":query})
 
-    return render_template("home.html", posts=posts, tag_dict=tag_dict, search=query)
+    return render_template("home.html", posts=posts, tag_dict=tag_dict, search=query, posts_per_page=posts_per_page, post_count=len(posts))
 
 def settings(method, request_obj: Request):
     helpers.pagechange("settings page")
@@ -41,7 +41,7 @@ def statistics():
 
 ####
 def post(post_id):
-    helpers.pagechange("post page")
+    helpers.pagechange(f"post_page:{post_id}")
     #get post obj
     post_obj = database.get_post(post_id)
     if (post_obj == None) or (post_obj.deleted == True):

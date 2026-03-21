@@ -68,7 +68,7 @@
 <script src="/static/paginatior.js"></script>
 <script>
     window.onload  = function() {
-        const element = paginator();
+        const element = paginator(parseInt("{{posts_per_page}}"), parseInt("{{post_count}}"));
         const paginator_element = document.getElementById("paginatior")
         paginator_element.after(element)
     };

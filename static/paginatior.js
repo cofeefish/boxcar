@@ -14,7 +14,7 @@ function create_link(path, param_keys, param_values) {
     return url_string;
 }
 
-function paginator(query, ids_per_page, total_pages){
+function paginator(ids_per_page, posts, total_pages){
     const url_str = window.location.href;
     var curr_page = new URL(url_str).searchParams.get("page");
     // normalize numbers
@@ -22,8 +22,8 @@ function paginator(query, ids_per_page, total_pages){
     if (isNaN(curr_page)) curr_page = 0;
     if (isNaN(total_pages) || total_pages < 0) total_pages = 0;
     curr_page = Math.max(0, curr_page);
-    console.log(curr_page)
-
+    if (posts < ids_per_page) {total_pages = curr_page}
+    print
 
     const nav = document.createElement('nav');
     nav.className = 'paginator';
@@ -50,8 +50,10 @@ function paginator(query, ids_per_page, total_pages){
     }
 
     // first / prev
-    nav.appendChild(makeItem('« First', 0, {disabled: curr_page === 0}));
-    nav.appendChild(makeItem('‹ Prev', curr_page - 1, {disabled: curr_page === 0}));
+    if (curr_page !== 0) {
+    nav.appendChild(makeItem('« First', 0));
+    nav.appendChild(makeItem('‹ Prev', curr_page - 1));
+    }
 
     // page number window
     const maxVisible = 7;
@@ -64,8 +66,10 @@ function paginator(query, ids_per_page, total_pages){
     }
 
     // next / last
-    nav.appendChild(makeItem('Next ›', curr_page + 1));
-    nav.appendChild(makeItem('Last »', total_pages, {disabled: curr_page === total_pages}));
+    if (posts >= ids_per_page) {
+        nav.appendChild(makeItem('Next ›', curr_page + 1));
+        nav.appendChild(makeItem('Last »', total_pages));
+    }
 
     return nav;
 }
