@@ -88,19 +88,22 @@ def make_thumbnaill(path: str, size:tuple = dimensions , to_link=False, name="",
 
 #
 def get_statistics():
-    from database import filter_posts
+    from database import filter_posts, filter_tags
     posts = filter_posts("", fix_posts=False, num_returned=-1)
     database_size = sum([post.file_size for post in posts if post.file_size != None])
+    total_views = sum([post.views for post in posts if post.views != None])
+    total_duration = sum([post.duration for post in posts if post.duration > 0])
+
+    tag_count = filter_tags("", count=True, update=True)
     stats = {
+        'date_created': time.ctime(os.path.getctime(post_table_path)),
         'total_posts': len(posts),
         'total_filesize': format_size(str(database_size)),
         'average_filesize': format_size(str(database_size / len(posts))) if len(posts) > 0 else 0,
-        'total_views': 0,
-        'average_views': 0,
-        'total_score': 0,
-        'average_score': 0,
+        'total_views': total_views,
         'rating_distribution': {},
-        'tag_summary': {}
+        'tag_count': tag_count,
+        'total_video_duration' : total_duration
     }
 
     return stats

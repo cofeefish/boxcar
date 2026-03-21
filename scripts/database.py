@@ -87,7 +87,7 @@ log_path = f'{dataset_dir}/database_log.txt'
 posts_per_page = 20
 
 tag_detail_table_preset = {
-    "tags": [],
+    "tags": {},
     "tag_count" : 0
 }
 post_table_preset = {
@@ -502,6 +502,46 @@ def log_info(caller:str, arg_dict:dict):
     arg_string = '|'.join([f'{key}={val}' for key, val in arg_dict.items()])
     msg = f'**{caller}** {arg_string}'
     logging.info(msg)
+
+def filter_tags(query:str, update=False, count=False) -> list:
+    if update:
+        update_tag_detail_table()
+
+    query = query.strip().lower()
+    with open(tag_detail_table_path, 'r', encoding='utf-8') as f:
+        tag_table = dict(json.load(f))
+
+    if count == True:
+        return tag_table['tag_count']
+
+    tag_list = tag_table['tags']
+    #filter yet to be implemented
+    tag_list.sort(key=lambda x: x['count'], reverse=True)
+    
+    return tag_list
+
+def update_tag_detail_table():
+    posts = filter_posts("", fix_posts=False, num_returned=-1)
+    with open(tag_detail_table_path, 'r', encoding='utf-8') as f:
+        tag_table = dict(json.load(f))
+
+    "inner is in format of {'tagname: {name: *, count: *, robots: [*]} "
+    tag_inner_dict = dict(tag_table.get('tags', {}))
+
+    for post in posts:
+        for tag in post.tag_list:
+            if tag in tag_inner_dict.keys():
+                tag_inner_dict[tag]["count"] += 1
+            else:
+                tag_inner_dict[tag] = {"name": tag, "count": 1, "robots": []}
+
+    tag_table = {
+        "tags": tag_inner_dict,
+        "tag_count" : len(tag_inner_dict.keys())
+    }
+    with open(tag_detail_table_path, 'w', encoding='utf-8') as f:
+        json.dump(tag_table, f, indent=4)
+
 
 initialize_database()
 #setup logging
