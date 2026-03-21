@@ -193,13 +193,16 @@ def upload(method, request_obj: Request):
         request_dict = dict(request_obj.form.to_dict(flat=False))
         url = request_dict.get('upload[source]', [""])[0]
         recursive = request_dict.get('upload[recursive]', ['off'])[0] == 'on'
+        recursive = True
         #print(f"Upload request: {len(all_files)} files, url={url}, recursive={recursive}")
 
         if (url != ""):
             filepath=database.temp_dir
             url_list = url.split(' ')
             for url in url_list:
-                importer.save_media_from_url(filepath, input_url_list = [url], recursive=recursive)
+                t = database.quicktimer(f"extract media from url: {url}")
+                importer.extract_media_urls_from_url(url, recursive=recursive)
+                t.finish()
         else:
             for file in all_files:
                 #print(f"Uploading file: {file.filename}")

@@ -1,11 +1,13 @@
-import requests, os, logging, re, time, threading
+import requests, os, logging, re, time
 import database
 import urllib.parse as parse
+from concurrent.futures import ThreadPoolExecutor
 
 ytdlp = False
 use_ytdlp = database.get_setting('use_ytdlp', False)
 if use_ytdlp:
-    ytdlp_blacklist = ['danbooru', 'donmai']
+    ytdlp_whitelist = ['youtube.com', 'youtu.be', 'vimeo.com', 'dailymotion.com']
+    ytdlp_blacklist =[]
     import yt_dlp as ytdlp
 
 #project wide vars
@@ -14,16 +16,25 @@ source_dir = database.source_dir
 temp_dir = database.temp_dir
 post_table_path = database.post_table_path
 
+verbose = True
+
+depth_limit = int(database.get_setting('recursive_upload_depth', 2))
+
 source_splitter_str = "+++"
 
 #sites with an impelmented api
 apis = []
-#
 max_workers = 4
+# executor for background downloads (downloads run concurrently with crawling)
+download_executor = ThreadPoolExecutor(max_workers=max_workers)
+larger_blacklist = True 
 blacklist = ['logo', 'icon', '.js', 'avatar',
             'thumbnail', 'watermark',
-            'banner', 'profile', '.svg']
-image_extensions = ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'tiff', 'svg', 'gif']
+            'banner', 'profile', '.svg', 'css', 'javascript']
+if larger_blacklist:
+    blacklist += ['tag', 'dmca', 'help', 'support', 'contact', 'about', 'privacy', 'terms', 'account', 'login', 'signup', 'register', 'tos', 'list']
+
+image_extensions = ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'tiff', 'gif']
 video_extensions = ['mp4', 'webm', 'avi', 'flv', 'mov', 'wmv', 'mkv', 'm4v', 'mpeg']
 
 #small helpers
@@ -67,303 +78,232 @@ def get_and_check_response(url, stream = False):
 
 
 class urlTreeNode:
-    def __init__(self, url: str):
+    def __init__(self, url: str, parent = None):
+        self.tree_id = str(time.time()).replace('.', '')
         self.url = url
         self.children = []
+        self.parent = parent
+        self.checked = False
+        self.is_media = is_media_url(url)
+
+        # If this node is a root, create its own tree_dict; otherwise register
+        # this node in the root's tree_dict and add to the parent's children.
+        if parent is None:
+            self.root = self
+            self.tree_dict = {self.tree_id: self}
+        else:
+            self.root = parent.root
+            parent.add_child(self)
+            self.root.tree_dict[self.tree_id] = self
+
     def add_child(self, child_node):
-        self.children.append(child_node)
+        if child_node not in self.children:
+            self.children.append(child_node)
+            child_node.parent = self
+            child_node.root = self.root
+            # ensure child is registered in the root's index
+            if not hasattr(self.root, 'tree_dict'):
+                self.root.tree_dict = {}
+            self.root.tree_dict[child_node.tree_id] = child_node
+
+    def get_all_nodes(self) -> list:
+        # Return all nodes in the current tree using DFS from the root.
+        def dfs(node: urlTreeNode):
+            nodes = [node]
+            for child in node.children:
+                assert type(child) == urlTreeNode
+                nodes.extend(dfs(child))
+            return nodes
+        return dfs(self.root)
+    def get_all_urls(self):
+        return [node.url for node in self.get_all_nodes()]
+
+    def path_to_root(self):
+        path = []
+        node = self
+        while node is not None:
+            path.append(node.url)
+            node = node.parent
+        return path[::-1]
 
 #media functions
-def save_media_from_url(path: str, name = "", input_url_list = [], recursive = False):
-    '''
-    recursively search for and save media files from a url
+def is_media_url(url: str)->bool:
+    '''Determines if a URL likely points directly to a media file or an API endpoint that can be extracted with ytdlp.'''
+    #ends with file extension
+    parsed_uri = parse.urlparse(url)
+    url_extension = parsed_uri.path.split('.')[-1]
+    if (url_extension in image_extensions or url_extension in video_extensions):
+        return True
     
-    :param path: Description
-    :type path: str
-    :param name: Description
-    :param file: Description
-    :param sources: list fo sources that lead to a file, last one is the final file
-    :type sources: list
-    '''
-    def is_media_url(parsed_uri: parse.ParseResult)->bool:
-        url_extension = parsed_uri.path.split('.')[-1]
-        if (url_extension in image_extensions or url_extension in video_extensions):
+    #url is supported by ytdlp
+    if use_ytdlp:
+        if any([netloc in parsed_uri.netloc for netloc in ytdlp_whitelist]):
             return True
         
-        exception_pairs = [("pixeldrain.com", "/api/file/")]
-        for netloc, path in exception_pairs:
-            if (parsed_uri.netloc == netloc) and (parsed_uri.path.startswith(path)):
-                return True
-        return False
+    #api endpoints that don't have a media file extension but can be return a media file
+    exception_pairs = [("pixeldrain.com", "/api/file/")]
+    for netloc, path in exception_pairs:
+        if (parsed_uri.netloc == netloc) and (parsed_uri.path.startswith(path)):
+            return True
+    return False
 
-    def add_file_to_queue_from_urls(path: str, job_id: str, media_pair_list: list):
-        '''
-        Docstring for add_file_to_queue_from_urls
+def save_media_url(url: str, parent_sources = []):
+    '''
+    Saves media from a URL directly if it points to a media file, or uses ytdlp if it's a supported site.
+    '''
+    #helper functions for specific cases
+    def save_direct_media(url: str, job_id: str, filepath: str) -> str:
+        response = get_and_check_response(url, stream=True)
+        if response is None:
+            raise RuntimeError(f"unable to download file from url: {url}, invalid url")
+
+        chunk_size = 2048
+        total_size = int(response.headers.get('content-length', 0))
+        bytes_downloaded = 0
+
+        indices = 4
+        index = 0
+
+        if total_size == 0: raise FileNotFoundError('media downloaded is zero bytes')
+
+        logging.info(f"**UPLOADER** START-DOWNLOAD|{job_id}|{source_splitter_str.join(parent_sources)}|{total_size}bytes")
+
+        z = total_size // (indices + 1)
+        with open(filepath, 'wb') as media_file:
+            for chunk in response.iter_content(chunk_size):
+                media_file.write(chunk)
+                bytes_downloaded += len(chunk)
+                new_index = bytes_downloaded // z
+                if new_index != index:
+                    logging.info(f"**UPLOADER** PROGRESS|{job_id}|{bytes_downloaded}bytes")
+                    index = new_index
         
-        :param path: Description
-        :type path: str
-        :param job_id: Description
-        :type job_id: str
-        :param media_pair_list: Description of list of media pairs (url, path importer traversed)
-        :type media_pair_list: list
-        '''
-        def save_file_subroutine(extension:str|None, path: str, job_id: str, url:str, parent_sources:list):
-            filepath = f'{path}.{extension}' if extension else path
-            try:
-                if job_id == "":
-                    raise RuntimeError("no job id specified")
-                logging.info(f"**UPLOADER** START|{job_id}|{path}|{source_splitter_str.join(parent_sources)}")
-                parsed_uri = parse.urlparse(url)
-                url_is_valid = True if (
-                    parsed_uri.scheme != "" and
-                    parsed_uri.netloc != ""
-                ) else False
+        return filepath
+    def save_with_ytdlp(url: str, job_id: str, filepath: str) -> str:
+        if not ('https://' in url or 'http://' in url):
+            url = "http://" + url
 
-                if url_is_valid:
-                    media_found = False
+        path, extension = os.path.splitext(os.path.basename(url))
+        # include job_id in filename to avoid collisions when downloading concurrently
+        if extension:
+            filepath_name = f"{path}_{job_id}.{extension}"
+        else:
+            filepath_name = f"{escape_str(url)}_{job_id}"
+        filepath = os.path.join(temp_dir, filepath_name)
 
-                    extension = url.split('.')[-1].lower().split('?')[0]
-                    if not ('https://' in url or 'http://' in url):
-                        url = "http://" + url
-                    print([(x, url, x not in url) for x in ytdlp_blacklist])
-                    if use_ytdlp and all([x not in url for x in ytdlp_blacklist]):
-                        ytdlp_opts = {
-                            'outtmpl': filepath,
-                            'quiet': True,
-                            'no_warnings': True,
-                            'ignoreerrors': True,
-                            'noplaylist': True
-                        }
-                        assert type(ytdlp) != bool, "yt_dlp failed to import"
-                        with ytdlp.YoutubeDL(ytdlp_opts) as ydl: #type: ignore
-                            try:
-                                info = ydl.extract_info(url, download=True)
-                                extension = info.get('ext', '')
-                                print(filepath, extension)
-                                if extension and os.path.exists(filepath):
-                                    downloaded_file = f'{filepath}.{extension}'
-                                    if os.path.exists(downloaded_file):
-                                        filepath = downloaded_file
-                                media_found = True
-                            except Exception as e:
-                                print(f'ytdlp failed to download media from url: {url}, error: {e}')
+        print([(x, url, x not in url) for x in ytdlp_blacklist])
+        if use_ytdlp and all([x not in url for x in ytdlp_blacklist]):
+            ytdlp_opts = {
+                'outtmpl': filepath,
+                'quiet': True,
+                'no_warnings': True,
+                'ignoreerrors': True,
+                'noplaylist': True
+            }
+            assert type(ytdlp) != bool, "yt_dlp failed to import"
+            with ytdlp.YoutubeDL(ytdlp_opts) as ydl: #type: ignore
+                try:
+                    info = ydl.extract_info(url, download=True)
+                    extension = info.get('ext', '')
+                    print(filepath, extension)
+                    if extension and os.path.exists(filepath):
+                        downloaded_file = f'{filepath}.{extension}'
+                        if os.path.exists(downloaded_file):
+                            filepath = downloaded_file
+                except Exception as e:
+                    print(f'ytdlp failed to download media from url: {url}, error: {e}')
+        return filepath
 
-                    elif is_media_url(parsed_uri):
-                        print('media link, downloading directly')
-                        response = get_and_check_response(url, stream=True)
-                        if response == None: 
-                            raise RuntimeError(f"unable to download file from url: {url}, invalid url")
+    #main function body
+    job_id = str(time.time()).replace('.', '')
+    path, extension = os.path.splitext(os.path.basename(url))
+    # include job_id in filename to avoid collisions when downloading concurrently
+    if extension:
+        filepath_name = f"{path}_{job_id}.{extension}"
+    else:
+        filepath_name = f"{escape_str(url)}_{job_id}"
+    filepath = os.path.join(temp_dir, filepath_name)
+    #ends with file extension
+    parsed_uri = parse.urlparse(url)
+    url_extension = parsed_uri.path.split('.')[-1]
+    if (url_extension in image_extensions or url_extension in video_extensions):
+        save_direct_media(url, job_id, filepath)
+        #url is supported by ytdlp
+    elif use_ytdlp:
+        if any([netloc in parsed_uri.netloc for netloc in ytdlp_whitelist]):
+            save_with_ytdlp(url, job_id, filepath)
+    else:
+        raise RuntimeError(f"unable to download file from url, no media found")
+    
+    #move file to queue
+    database.move_file_to_queue(filepath, job_id)
 
-                        chunk_size = 2048
-                        total_size = int(response.headers.get('content-length', 0))
-                        bytes_downloaded = 0
-
-                        indices = 4
-                        index = 0
-                        if total_size == 0: raise FileNotFoundError('media downloaded is zero bytes')
-                        logging.info(f"**UPLOADER** START-DOWNLOAD|{job_id}|{source_splitter_str.join(parent_sources)}|{total_size}bytes")
-                        z = total_size // (indices + 1)
-                        with open(filepath, 'wb') as media_file:
-                            for chunk in response.iter_content(chunk_size):
-                                media_file.write(chunk)
-                                bytes_downloaded += len(chunk)
-                                new_index = bytes_downloaded // z
-                                if new_index != index:
-                                    logging.info(f"**UPLOADER** PROGRESS|{job_id}|{bytes_downloaded}bytes")
-                                    index = new_index
-                        media_found = True
-                    else:
-                        #try to find media in page
-                        response = get_and_check_response(url)
-                        if response == None:
-                            raise RuntimeError(f"unable to download file from url: {url}, invalid url")
-                        html = response.text
-                        media_urls = get_media_urls(html)
-
-                        semaphore = threading.Semaphore(max_workers)
-                        threads = []
-                        for i, sub_url in enumerate(media_urls):
-                            sub_path = f'{path}_{i}'
-                            sub_job_id = f'{job_id}_{i}'
-
-                            print(len(parent_sources))
-                            if len(parent_sources) == 1:
-                                media_pair = (sub_url, [parent_sources[0], sub_url])
-                            else:
-                                media_pair = (sub_url, parent_sources[1] + [sub_url])
-
-                            def worker(p=sub_path, jid=sub_job_id, media_pair=[media_pair]):
-                                try:
-                                    add_file_to_queue_from_urls(p, jid, media_pair)
-                                finally:
-                                    semaphore.release()
-
-                            semaphore.acquire()
-                            thread = threading.Thread(target = worker)
-                            threads.append(thread)
-                            thread.start()
-
-                    if not media_found:
-                        raise RuntimeError(f"unable to download file from url, no media found")
-                else:
-                    raise RuntimeError("no valid url or file")
-
-                #MOVE FILE TO FINAL LOCATION
-                assert os.path.isfile(filepath), "file not found after download"
-                assert extension != "", "file has no extension"
-                final_path = database.add_file('queue_storage', f'{job_id}.{extension}', data=b'')
-                os.replace(filepath, final_path)
-                logging.info(f'**UPLOADER** COMPLETE|{job_id}|{final_path}|post_id')
-            except Exception as e:
-                message = f'**UPLOADER** ERROR|{job_id}|{e}'
-                print(message)
-                logging.error(message)
-
-        for i, media_pair in enumerate(media_pair_list): 
-            end_url, parent_sources = media_pair
-            end_url = str(end_url).strip('#')
-            if end_url == "":
-                raise RuntimeError("no valid url or file")
-            filepath = os.path.join(temp_dir, f'temp_{job_id}')
-            extension = end_url.split('.')[-1].lower().split('?')[0]
-            if '/' in extension or len(extension) > 5: extension = None
-            save_file_subroutine(extension, filepath, f'{job_id}_{i}', end_url, parent_sources)
-        sources_str_list = [str(media_pair[0]) for media_pair in media_pair_list]
-        logging.info(f"**UPLOADER** ALL COMPLETE|{job_id}|{path}|{source_splitter_str.join(sources_str_list)}")
-
-    def get_media_urls(html: str) -> list[str]:
-        """Extracts inner HTML of media elements from the provided HTML string."""
-        html = re.sub(r'[\n]', ' ', html)#remove new lines
-        pattern = re.compile(r'(<img.*?>)|(<video[\s\S]*?</video>)|(<meta property="og:image".*?>)')
-        media_htmls = [str(''.join(x)) for x in re.findall(pattern,html)]
-
-        media_sources = []
-        for media in media_htmls:
-            if any([x in media.lower() for x in blacklist]):
-                ##print(f'skipping media with blacklisted content: {media}')
-                continue
-            media_src = re.search(r'src="(.*?)"|content="(.*?)"', media)
-            if media_src == None:
-                continue
-            media_src = media_src.group(1) if media_src.group(1) != None else media_src.group(2)
-            media_sources.append(media_src)
-        return media_sources
-
-    #recursive stuff
-    def get_post_urls(html: str) -> list[str]:
-        """Extracts inner HTML of link elements from the provided HTML string."""
+def get_sub_urls_from_url(url: str) -> list:
+    '''Extracts all linked URLs from the provided URL's page content.'''
+    try:
+        response = get_and_check_response(url)
+        if response is None:
+            return []
+        html = response.text
         html = re.sub(r'[\n]', ' ', html)  # remove new lines
         pattern = re.compile(r'(<a .*? href="(.*?)".*?>)')
-        post_htmls = [str(''.join(x)) for x in re.findall(pattern, html)]
+        post_htmls = [x for x in re.findall(pattern, html)]
 
         post_sources = []
         for post in post_htmls:
-            post_href = re.search(r'href="(.*?)"', post)
-            if post_href is None:
+            href = post[-1]
+            if href == "" or href.startswith('#'):
                 continue
-            post_href = post_href.group(1)
+            #check if url contains blacklisted keywords to avoid crawling unnecesary pages
+            if any([(blacklisted in href) for blacklisted in blacklist]):
+                if verbose:
+                    pass
+                    #print(f'skipping url due to blacklist: {href}')
+                continue
+            post_href = parse.urljoin(url, href)
             post_sources.append(post_href)
         return post_sources
+    except Exception as e:
+        print(f'error checking url {url}: {e}')
+        return []
 
-    def recursive_search_subroutine(url: str, current_depth: int, depth_limit: int, checked_urls: set, path_stack: list):
-        """Recursively build a url tree. Media collection is done after the tree is built."""
-        if current_depth >= depth_limit:
-            return None
+def extract_media_urls_from_url(url: str, depth=0, recursive=False, depth_limit=depth_limit, ignore_blacklist=False, url_tree: urlTreeNode = None): # type: ignore
+    '''given a url, extract media urls from it, if recursive is true, it will also extract urls from the pages and extract media from them up to the depth limit'''
+    #check type of url
+    if ignore_blacklist and url.split('.')[-1] in blacklist:
+        return
 
-        # resolve and normalize the url
-        parsed_uri = parse.urlparse(url)
-        if parsed_uri.scheme == "" or parsed_uri.netloc == "":
-            return None
+    if verbose:
+        print(f'{depth * "  "}extracting media from url: {url}, depth: {depth}, recursive: {recursive}')
 
-        # use the full url as the normalized form
-        norm_url = parse.urlunparse(parsed_uri)
-        if norm_url in checked_urls:
-            return None
-        checked_urls.add(norm_url)
-
-        node = urlTreeNode(norm_url)
-
-        try:
-            response = get_and_check_response(norm_url)
-            if response is None:
-                return node
-            html = response.text
-
-            # find linked posts and recurse, resolving relative links
-            post_urls = get_post_urls(html)
-            for post_url in post_urls:
-                full_post = parse.urljoin(norm_url, post_url)
-                child_node = recursive_search_subroutine(full_post, current_depth + 1, depth_limit, checked_urls, path_stack + [full_post])
-                if child_node is not None:
-                    node.add_child(child_node)
-
-        except Exception as e:
-            print(f'error checking url {norm_url}: {e}')
-
-        return node
-
-    def collect_media_pairs_from_tree(root: urlTreeNode) -> list:
-        """Traverse the URL tree, fetch media only for leaf nodes, and return media_pairs.
-
-        Each media_pair is a tuple: (full_media_url, source_path_list)
-        """
-        media_pairs = []
-
-        def dfs(node: urlTreeNode, path: list):
-            '''Depth-first search to collect media URLs from leaf nodes.'''
-            if node is None:
-                return
-            if len(node.children) == 0:
-                try:
-                    response = get_and_check_response(node.url)
-                    if response is None:
-                        return
-                    html = response.text
-                    media_urls = get_media_urls(html)
-                    for m in media_urls:
-                        full_media = parse.urljoin(node.url, m)
-                        media_pairs.append((full_media, path.copy()))
-                except Exception as e:
-                    print(f'error collecting media for {node.url}: {e}')
-            else:
-                for child in node.children:
-                    dfs(child, path + [child.url])
-
-        dfs(root, [root.url])
-        return media_pairs
-
-    depth_limit = int(database.get_setting('recursive_upload_depth', 2))
-    job_id = str(time.time()).replace('.', '')
-    name = os.path.basename(path) if name == "" else name
-    name = escape_str(name)
-    print(f'name: {name}, path: {path}, input_url_list: {input_url_list}, recursive: {recursive}')
-
-    if recursive:
-        checked_urls = set()
-        # build the url tree from the root
-        url_tree = recursive_search_subroutine(input_url_list[0], 0, depth_limit, checked_urls, [input_url_list[0]])
-        if url_tree is None:
-            print(f'no pages found from recursive search of url: {path}')
-            return
-
-        # collect media pairs from leaf nodes of the tree
-        media_pairs = collect_media_pairs_from_tree(url_tree)
-        print(f'recursive search found {len(media_pairs)} media pairs from url: {path}')
-        if len(media_pairs) == 0:
-            print(f'no media found from recursive search of url: {path}')
-            return
-
-        new_path = os.path.join(temp_dir, f'recursive_{job_id}_{name}')
-        thread = threading.Thread(target=add_file_to_queue_from_urls, args=(new_path, job_id, media_pairs))
+    if url_tree:
+        url_node = url_tree
     else:
-        # Non-recursive: expect `sources` to be a list of source URLs where the last is the media URL
-        if not isinstance(input_url_list, list) or len(input_url_list) == 0:
-            raise RuntimeError('no valid sources provided for non-recursive download')
-        media_url = input_url_list[-1]
-        media_pairs = [[media_url, input_url_list]]
-        thread = threading.Thread(target=add_file_to_queue_from_urls, args=(path, job_id, media_pairs))
-    thread.start()
-    return
+        url_node = urlTreeNode(url)
+    if is_media_url(url):
+        # submit media download to background executor so crawling continues
+        try:
+            download_executor.submit(save_media_url, url, url_node.path_to_root())
+        except Exception:
+            # fallback to synchronous save if executor submission fails
+            save_media_url(url, parent_sources=url_node.path_to_root())
+            print(f"failed to submit media download for url: {url} to background executor, saved synchronously instead")
+    else:
+        #recurisve case, get sub urls and call function on them
+        #uses a tree structure to keep track of urls and avoid duplicates
+        sub_urls = get_sub_urls_from_url(url)
+        #print(f'{depth * "  "}found {len(sub_urls)} sub urls from url: {url}')
+        for child_url in sub_urls:
+            #print(child_url not in url_node.get_all_urls())
+            if recursive and depth < depth_limit and child_url not in url_node.get_all_urls():
+                sub_url_tree = urlTreeNode(child_url, parent=url_node)
+                extract_media_urls_from_url(child_url, depth+1, True, depth_limit, ignore_blacklist, url_tree=sub_url_tree)
+    if depth == 0:
+        #test media checker
+
+        print(f'finished extracting media from url: {url}, total urls found: {len(url_node.get_all_nodes())}, downloaded {len([node for node in url_node.get_all_nodes() if node.is_media])} media files')
+        if verbose:
+            print(f'all urls found: {url_node.get_all_urls()}')
 
 #tag functions
 def get_tags_from_many_url(urls: list[str], end_type:str="str") -> list[str]|str:

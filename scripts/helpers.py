@@ -315,7 +315,7 @@ class queue_item:
         self.end_time   = end_time
         self.job_id     = job_id
         self.details    = details
-        self.source     = details[-1]
+        self.source     = details[0]
         self.source_printable = str(self.source)[7:17]+"..." + str(self.source)[-7:]
         self.complete_size       = size
         self.printable_size = format_size(size)
@@ -348,6 +348,16 @@ class queue_item:
 
 def delete_queueitem(job_id):
     logging.info(f"**UPLOADER** DELETE_ITEM|{job_id}|")
+
+'''
+log_event structure:
+**UPLOADER** {event_type}|{job_id}|...  data separated by |...
+types: START-DOWNLOAD, PROGRESS, FINALIZE, COMPLETE, ERROR, DELETE_ITEM
+
+data for each type:
+START-DOWNLOAD: job_id, source, total_size
+'''
+
 
 def get_queue():
     t=quicktimer("parse log")

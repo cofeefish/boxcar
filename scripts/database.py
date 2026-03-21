@@ -222,14 +222,24 @@ def add_file_to_queue(file: datastructures.FileStorage):
     file.save(filepath)
     filesize = os.path.getsize(filepath)
 
-    msg1 = f'**UPLOADER** START|{job_id}|{filepath}|From_Computer'
-    logging.info(msg1)
     msg2 = f'**UPLOADER** START-DOWNLOAD|{job_id}|From_Computer|{filesize}bytes'
     logging.info(msg2)
     
     final_path = add_file('queue_storage', f'{job_id}.{extension}', data=b'')
     os.replace(filepath, final_path)
 
+    msg3 = f'**UPLOADER** COMPLETE|{job_id}|{final_path}|post_id'
+    logging.info(msg3)
+
+def move_file_to_queue(filepath:str, job_id:str):
+    #file is already in temp, just move to queue
+    filename = os.path.basename(filepath)
+    extension = filename.split('.')[-1]
+    
+    final_path = add_file('queue_storage', f'{job_id}.{extension}', data=b'')
+    os.replace(filepath, final_path)
+
+    print(f'moved file from {filepath} to {final_path}')
     msg3 = f'**UPLOADER** COMPLETE|{job_id}|{final_path}|post_id'
     logging.info(msg3)
 
