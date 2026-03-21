@@ -408,17 +408,43 @@ def filter_posts(query: str, page: int = 0, num_returned: int = posts_per_page, 
             query_dict['tags'].append(condition.strip('-').lower())
     query_dict['tags'] = [tag for tag in query_dict['tags'] if len(tag)>0]
 
+    #changing from a list of posts to an ordered dict, so posts can be sorted before hand
     #get matching posts
-    matched_posts = []
-    
+    matched_posts = {}
+
+    from operator import attrgetter
+    def float_attr(name:str):
+        '''returns a function that takes a post_obj and returns the float value of the attribute with the given name'''
+        getter = attrgetter(name)
+        def sort_value_getter(post_obj:post_class):
+            return float(getter(post_obj))
+        return sort_value_getter
+
+    function_dict = { 
+        'id': float_attr('id'),
+        'score': float_attr('score'),
+        'views': float_attr('views'),
+        'file_size': float_attr('file_size'),
+        'height' : float_attr('media_height'),
+        'width' : float_attr('media_width'),
+    }
+    sort_function = function_dict.get(query_dict['sort_query'], None)
+    no_sort = False
+    #all posts must be checked if no_sort is true, otherwise only check enough posts to return the required amount after sorting
+    if (sort_function == None) or (query_dict['sort_query'] == 'id'):
+        if sort_function == None:
+            print(f'sort query {query_dict["sort_query"]} not found, defaulting to id')
+        no_sort = True
+        sort_function = function_dict['id']
+
     total_posts = len(post_table)
     required_posts = min(total_posts, num_returned + page*posts_per_page)
-    #print(f"page={page} -> t:{total_posts}, r:{required_posts}, n:{num_returned}")
+    if not no_sort:
+        required_posts = total_posts
+    print(f"page={page} -> t:{total_posts}, r:{required_posts}, n:{num_returned}")
 
     post_table.reverse()
     for post_dict in post_table:
-        if (len(matched_posts) >= required_posts) and (num_returned != -1):
-            break
         #load post
         post_obj = post_class.from_dict(post_dict)
         if fix_posts:
@@ -431,24 +457,23 @@ def filter_posts(query: str, page: int = 0, num_returned: int = posts_per_page, 
                 post_obj.from_dict(post_dict)
                 post_obj.save()
         
-        if check_post(post_obj, query_dict):
-            matched_posts.append(post_obj)
-    #sort
-    from operator import attrgetter
-    def int_attr(name):
-        getter = attrgetter(name)
-        return lambda p: int(getter(p))
+        if not check_post(post_obj, query_dict):
+            continue
 
-    function_dict = {
-        'id': int_attr('id'),
-        'score': int_attr('score'),
-        'views': int_attr('views'),
-        'file_size': int_attr('file_size'),
-        'height' : int_attr('media_height'),
-        'width' : int_attr('media_width'),
-    }
-    sort_function = function_dict.get(query_dict['sort_query'], int_attr('id'))
-    matched_posts.sort(key=sort_function, reverse=True)
+        #get sort value to insert post into matched_posts based on sort_query
+        sort_value = sort_function(post_obj)
+        if sort_value in matched_posts.keys():
+            #if there is a tie in sort value, add a small amount to the sort value until it is unique
+            while sort_value in matched_posts.keys():
+                sort_value += 0.0000001
+        matched_posts[sort_value] = post_obj
+
+        if (len(matched_posts) >= required_posts) and (num_returned != -1):
+            break
+
+    #sort
+    matched_posts = sorted(matched_posts.items(), key=lambda item: item[0], reverse=True)
+    matched_posts = [item[1] for item in matched_posts]
 
     matched_posts = matched_posts[page*posts_per_page : num_returned + page*posts_per_page] #return paged slice
     return matched_posts

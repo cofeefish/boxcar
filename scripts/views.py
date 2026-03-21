@@ -7,6 +7,7 @@ def home(method, request_obj: Request):
     query = request_obj.args.get('query', "")
     page = int(request_obj.args.get('page', 0))
     posts_per_page = int(database.get_setting('posts_per_page'))
+    print(posts_per_page)
 
     posts = database.filter_posts(query, page, num_returned=posts_per_page, fix_posts=False)
 
