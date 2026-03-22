@@ -16,26 +16,34 @@ source_dir = database.source_dir
 temp_dir = database.temp_dir
 post_table_path = database.post_table_path
 
-verbose = True
+#optimization vars
+verbose = False
+larger_blacklist = True
+ignore_mirrors = True
 
 depth_limit = int(database.get_setting('recursive_upload_depth', 2))
-
 source_splitter_str = "+++"
-
-#sites with an impelmented api
-apis = []
 max_workers = 4
 # executor for background downloads (downloads run concurrently with crawling)
 download_executor = ThreadPoolExecutor(max_workers=max_workers)
-larger_blacklist = True 
+
+#storage vars
+apis = []
 blacklist = ['logo', 'icon', '.js', 'avatar',
             'thumbnail', 'watermark',
             'banner', 'profile', '.svg', 'css', 'javascript']
 if larger_blacklist:
-    blacklist += ['tag', 'dmca', 'help', 'support', 'contact', 'about', 'privacy', 'terms', 'account', 'login', 'signup', 'register', 'tos', 'list']
-
+    blacklist += ['tag', 'dmca', 'help', 'support', 'contact', 'about', 'privacy', 'terms',
+                   'account', 'login', 'signup', 'register', 'tos', 'list', 'sample', 'wiki',
+                   'artists', 'pools', 'forum', 'comment', 'explore', 'search', 'blog', 'news', 'users',
+                   'iqdb_']
 image_extensions = ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'tiff', 'gif']
 video_extensions = ['mp4', 'webm', 'avi', 'flv', 'mov', 'wmv', 'mkv', 'm4v', 'mpeg']
+'''
+mirror_dict structure: {domain: [mirror_urls]}'''
+mirror_dict = {
+    'danbooru.donmai.us' : ['i.pximg.net', 'twitter.com', 'huqu.fanbox.cc', 'pawoo.net', 'www.pixiv.net', 'x.com', 'www.patreon.com', 'discord.gg'],
+}
 
 #small helpers
 
@@ -125,6 +133,13 @@ class urlTreeNode:
             path.append(node.url)
             node = node.parent
         return path[::-1]
+    
+    def get_all_edges(self):
+        edges = []
+        for node in self.get_all_nodes():
+            for child in node.children:
+                edges.append((node.url, child.url))
+        return edges
 
 #media functions
 def is_media_url(url: str)->bool:
@@ -241,6 +256,7 @@ def save_media_url(url: str, parent_sources = []):
 def get_sub_urls_from_url(url: str) -> list:
     '''Extracts all linked URLs from the provided URL's page content.'''
     try:
+        parsed_uri = parse.urlparse(url)
         response = get_and_check_response(url)
         if response is None:
             return []
@@ -262,7 +278,21 @@ def get_sub_urls_from_url(url: str) -> list:
                 continue
             post_href = parse.urljoin(url, href)
             post_sources.append(post_href)
-        return post_sources
+
+        filtered_child_urls = []
+        if ignore_mirrors and parsed_uri.hostname in mirror_dict.keys():
+            assert type(parsed_uri.hostname) == str
+            ignore_list = mirror_dict[parsed_uri.hostname]
+            for href in post_sources:
+                href_netloc = parse.urlparse(href).netloc
+                href_path = parse.urlparse(href).path
+
+                #check if the url is from a mirror domain to avoid crawling the same page multiple times through different mirrors
+                if (href_netloc not in ignore_list):
+                    filtered_child_urls.append(href)
+        else:
+            filtered_child_urls = post_sources
+        return filtered_child_urls
     except Exception as e:
         print(f'error checking url {url}: {e}')
         return []
@@ -301,6 +331,7 @@ def extract_media_urls_from_url(url: str, depth=0, recursive=False, depth_limit=
     if depth == 0:
         #test media checker
 
+        print(url_node.get_all_edges())
         print(f'finished extracting media from url: {url}, total urls found: {len(url_node.get_all_nodes())}, downloaded {len([node for node in url_node.get_all_nodes() if node.is_media])} media files')
         if verbose:
             print(f'all urls found: {url_node.get_all_urls()}')

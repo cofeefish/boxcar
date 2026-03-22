@@ -712,6 +712,7 @@ class post:
         except HashExistsError:
             pass
             #print(f'error saving post {self.id}: hash already exists in database')
+        self.tag_list: list = [x.lower() for x in self.tag_string.split()]
         t.finish()
         print(f'post {self.id} saved successfully')
         logging.info(f"**UPLOADER** SAVE_POST |{self.job_id}|{media_path}->{self.filepath}|{self.id}")
