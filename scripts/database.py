@@ -465,7 +465,7 @@ def filter_posts(query: str, page: int = 0, num_returned: int = posts_per_page, 
                 #print(f'\nold post dict: {post_dict}\nnew post dict: {new_post_dict}\n')
                 post_dict = new_post_dict
                 post_obj.from_dict(post_dict)
-                post_obj.save()
+                post_obj.save(check_hash=False)
         
         if not check_post(post_obj, query_dict):
             continue

@@ -39,7 +39,7 @@ def pagechange(page_name:str=""):
         post_obj = get_post(post_id)
         assert type(post_obj) == post
         post_obj.views += 1
-        post_obj.save(ignore_media=True)
+        post_obj.save(ignore_media=True, check_hash=False)
 
 dimensions = (int(get_setting("thumbnail_width", 128)), int(get_setting("thumbnail_height", 128)))
 def make_thumbnaill(path: str, size:tuple = dimensions , to_link=False, name="", final_ext='png') -> str:
@@ -676,7 +676,7 @@ class post:
         )
 
         return post_obj
-    def save(self, ignore_media=None):
+    def save(self, ignore_media=None, check_hash=False):
         '''
         saves post to post table with it's values
         
@@ -708,9 +708,11 @@ class post:
         print(json_data)
         from database import HashExistsError
         try:
-            add_post_entry(final_path, json_data, check_hash=not ignore_media)
+            add_post_entry(final_path, json_data, check_hash=check_hash)
         except HashExistsError:
-            pass
+            if check_hash:
+                print(f'error saving post {self.id}: hash already exists in database')
+                return
             #print(f'error saving post {self.id}: hash already exists in database')
         self.tag_list: list = [x.lower() for x in self.tag_string.split()]
         t.finish()

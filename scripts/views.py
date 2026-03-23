@@ -98,7 +98,7 @@ def finalize_post(method, request_obj: Request):
     )
     t.finish()
     t=database.quicktimer("save post")
-    post_obj.save()
+    post_obj.save(check_hash=True)
     t.finish()
     return redirect('posts/' + str(post_obj.id))
 
@@ -144,7 +144,7 @@ def edit_post(post_id, request_obj: Request):
         import video_editor
         video_editor.crop_trim(post_obj.filepath, post_obj.filepath, crop_x, crop_y, crop_width, crop_height, post_trim_in, post_trim_out, gain)
 
-    post_obj.save()
+    post_obj.save(check_hash=False)
     media_url = url_for('media', filename=post_obj.filepath)
     return render_template("post.html", post=post_obj, media_url=media_url)
 
