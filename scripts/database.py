@@ -539,6 +539,11 @@ def log_info(caller:str, arg_dict:dict):
     logging.info(msg)
 
 def filter_tags(query:str, update=False, count=False) -> list:
+    '''
+    filters tags in database based on a query string, 
+    returns the total count of tags if count is true
+    '''
+    import re
     if update:
         update_tag_detail_table()
 
@@ -549,8 +554,19 @@ def filter_tags(query:str, update=False, count=False) -> list:
     if count == True:
         return tag_table['tag_count']
 
-    tag_list = tag_table['tags']
-    #filter yet to be implemented
+    tag_list = list(tag_table['tags'].values())
+    #filter
+    #format query for regex
+    try:
+        parts = query.split()
+        parts = [re.escape(p).replace('\\*', '.*') for p in parts]
+        filter_pattern = re.compile('|'.join(parts))
+    except re.error:
+        filter_pattern = re.compile('.*')
+    print(f'filter pattern: {filter_pattern.pattern}')
+    tag_list = [tag for tag in tag_list if filter_pattern.search(tag['name'])]
+
+    assert type(tag_list) == list
     tag_list.sort(key=lambda x: x['count'], reverse=True)
     
     return tag_list
@@ -562,6 +578,8 @@ def update_tag_detail_table():
 
     "inner is in format of {'tagname: {name: *, count: *, robots: [*]} "
     tag_inner_dict = dict(tag_table.get('tags', {}))
+    for key in tag_inner_dict.keys():
+        tag_inner_dict[key]['count'] = 0 # reset count
 
     for post in posts:
         for tag in post.tag_list:

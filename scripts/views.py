@@ -210,3 +210,17 @@ def upload(method, request_obj: Request):
 
         return redirect("/queue")
     return redirect("/")
+
+def tag_wiki(request_method, request_obj: Request):
+    query = request_obj.args.get('query', "")
+    helpers.pagechange("tag wiki")
+    database.update_tag_detail_table()
+    tags = database.filter_tags(query)
+    return render_template("tag_wiki.html", tag_dict=tags, search=query)
+
+def tag_wiki_tag(tag: str):
+    helpers.pagechange("tag wiki")
+    database.update_tag_detail_table()
+    tags = database.filter_tags(tag)
+    return render_template("tag_wiki.html", tag_dict=tags)
+

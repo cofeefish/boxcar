@@ -37,7 +37,7 @@ def pagechange(page_name:str=""):
         from database import get_post
         post_id = page_name.split(":")[-1]
         post_obj = get_post(post_id)
-        assert type(post_obj) == post
+        assert type(post_obj) == post, f"error, post not found for id {post_id}"
         post_obj.views += 1
         post_obj.save(ignore_media=True, check_hash=False)
 

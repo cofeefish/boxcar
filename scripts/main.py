@@ -63,6 +63,12 @@ def upload():    return views.upload(request.method, request)
 @app.route('/statistics')
 def statistics(): return views.statistics()
 
+@app.route('/tag_wiki')
+def tag_wiki(): return views.tag_wiki(request.method, request)
+
+@app.route('/tag_wiki/<tag>')
+def tag_wiki_tag(tag): return views.tag_wiki_tag(tag)
+
 ############################################
 
 if __name__ == '__main__':
