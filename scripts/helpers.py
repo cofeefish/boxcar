@@ -240,36 +240,115 @@ def get_media_attributes(path: str) -> dict:
     elif file_ext in video_extensions:
         output=None
         try:
-            cmd = ['ffprobe', '-v', 'error',
-                    '-select_streams', 'v:0',
-                    '-show_entries', 'stream=width,height,duration,nb_frames,r_frame_rate',
-                    '-of', 'default=noprint_wrappers=1',
-                    path]
+            # Primary probe: ask for format duration and stream fields (avg_frame_rate is often more reliable)
+            cmd = [
+                'ffprobe', '-v', 'error',
+                '-select_streams', 'v:0',
+                '-show_entries', 'format=duration,stream=width,height,nb_frames,avg_frame_rate,r_frame_rate',
+                '-of', 'default=noprint_wrappers=1',
+                path
+            ]
             result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             output = result.stdout.splitlines()
-            #order of output depends on ffprobe version and media type
-            width, height, duration, nb_frames, framerate = None, None, None, None, None
+            print(f'ffprobe output for {path}:\n{output}')
+            # initialize
+            width = height = None
+            duration = None
+            nb_frames = None
+            framerate = None
+            avg_frame_rate_str = None
+
             for line in output:
                 if line.startswith('width='):
-                    width = line.split('=')[1]
+                    width = line.split('=', 1)[1]
                 elif line.startswith('height='):
-                    height = line.split('=')[1]
+                    height = line.split('=', 1)[1]
                 elif line.startswith('duration='):
-                    duration_str = line.split('=')[1]
-                    duration = round(float(duration_str), 2) if is_float(duration_str) else -1
+                    duration_str = line.split('=', 1)[1]
+                    if is_float(duration_str):
+                        duration = round(float(duration_str), 2)
                 elif line.startswith('nb_frames='):
-                    nb_frames_str = line.split('=')[1]
-                    nb_frames = int(float(nb_frames_str)) if is_float(nb_frames_str) else 0
+                    nb_frames_str = line.split('=', 1)[1]
+                    if is_float(nb_frames_str):
+                        nb_frames = int(float(nb_frames_str))
+                elif line.startswith('avg_frame_rate='):
+                    avg_frame_rate_str = line.split('=', 1)[1]
                 elif line.startswith('r_frame_rate='):
-                    framerate_str = line.split('=')[1]
+                    framerate_str = line.split('=', 1)[1]
+                    # sometimes r_frame_rate is a fraction like 30000/1001
                     if is_float(framerate_str):
                         framerate = round(float(framerate_str), 2)
-                    else:                
-                        framerate = -1
-                        if '/' in framerate_str:
-                            frames, fps = framerate_str.split('/')
-                            if ((is_float(frames)) and (is_float(fps))):
-                                framerate = round(float(frames) / float(fps), 2) if float(fps) != 0 else 0.0
+                    elif '/' in framerate_str:
+                        a, b = framerate_str.split('/')
+                        if is_float(a) and is_float(b) and float(b) != 0:
+                            framerate = round(float(a) / float(b), 2)
+
+            # Fallback 1: format-level duration if not provided
+            if (duration is None) or (duration == 0):
+                cmd_dur = ['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', path]
+                r2 = subprocess.run(cmd_dur, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                dur_out = r2.stdout.strip()
+                if is_float(dur_out):
+                    duration = round(float(dur_out), 2)
+
+            # Fallback 1b: if width/height missing, probe stream-only (some ffprobe builds/containers omit stream in combined query)
+            if (width is None) or (height is None):
+                cmd_stream = [
+                    'ffprobe', '-v', 'error',
+                    '-select_streams', 'v:0',
+                    '-show_entries', 'stream=width,height,nb_frames,avg_frame_rate,r_frame_rate',
+                    '-of', 'default=noprint_wrappers=1',
+                    path
+                ]
+                r_stream = subprocess.run(cmd_stream, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                stream_out = r_stream.stdout.splitlines()
+                for line in stream_out:
+                    if line.startswith('width=') and (width is None):
+                        w = line.split('=', 1)[1]
+                        if is_float(w):
+                            width = int(float(w))
+                    elif line.startswith('height=') and (height is None):
+                        h = line.split('=', 1)[1]
+                        if is_float(h):
+                            height = int(float(h))
+                    elif line.startswith('nb_frames=') and (nb_frames in (None, 0)):
+                        nb_frames_str = line.split('=', 1)[1]
+                        if is_float(nb_frames_str):
+                            nb_frames = int(float(nb_frames_str))
+                    elif line.startswith('avg_frame_rate=') and (avg_frame_rate_str is None):
+                        avg_frame_rate_str = line.split('=', 1)[1]
+                    elif line.startswith('r_frame_rate=') and (framerate is None):
+                        framerate_str = line.split('=', 1)[1]
+                        if is_float(framerate_str):
+                            framerate = round(float(framerate_str), 2)
+                        elif '/' in framerate_str:
+                            a, b = framerate_str.split('/')
+                            if is_float(a) and is_float(b) and float(b) != 0:
+                                framerate = round(float(a) / float(b), 2)
+
+            # Fallback 2: if nb_frames missing, run ffprobe with -count_frames (slow but accurate)
+            if (nb_frames is None) or (nb_frames == 0):
+                cmd_count = ['ffprobe', '-v', 'error', '-count_frames', '-select_streams', 'v:0', '-show_entries', 'stream=nb_read_frames', '-of', 'default=noprint_wrappers=1:nokey=1', path]
+                r3 = subprocess.run(cmd_count, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                nb_out = r3.stdout.strip()
+                if is_float(nb_out):
+                    nb_frames = int(float(nb_out))
+
+            # Determine framerate: prefer avg_frame_rate, then computed from nb_frames/duration, then r_frame_rate
+            if (framerate is None) and (avg_frame_rate_str):
+                s = avg_frame_rate_str
+                if '/' in s:
+                    a, b = s.split('/')
+                    if is_float(a) and is_float(b) and float(b) != 0:
+                        framerate = round(float(a) / float(b), 2)
+                elif is_float(s):
+                    framerate = round(float(s), 2)
+
+            if (framerate is None) and (nb_frames is not None) and (duration not in (None, 0)):
+                try:
+                    framerate = round(float(nb_frames) / float(duration), 2)
+                except Exception:
+                    framerate = None
 
             with open(path, 'rb') as afile:
                 buf = afile.read()
