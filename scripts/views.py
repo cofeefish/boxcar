@@ -184,7 +184,7 @@ def delete_queueitem(method, request_obj: Request):
 def upload(method, request_obj: Request):
     helpers.pagechange("upload page")
     if method == "GET":
-        return render_template("upload_start.html")
+        return render_template("upload_start.html", settings=database.get_all_settings()['current'])
     elif method == "POST":
         #process upload
         source_dir = database.get_source_dir()
@@ -192,8 +192,7 @@ def upload(method, request_obj: Request):
         all_files = request_obj.files.getlist('upload[files][]')
         request_dict = dict(request_obj.form.to_dict(flat=False))
         url = request_dict.get('upload[source]', [""])[0]
-        recursive = request_dict.get('upload[recursive]', ['off'])[0] == 'on'
-        recursive = True
+        recursive = int(request_dict.get('upload[recursive]', [str(database.get_setting('recursive_upload_depth'))])[0])
         #print(f"Upload request: {len(all_files)} files, url={url}, recursive={recursive}")
 
         if (url != ""):
@@ -201,7 +200,7 @@ def upload(method, request_obj: Request):
             url_list = url.split(' ')
             for url in url_list:
                 t = database.quicktimer(f"extract media from url: {url}")
-                importer.extract_media_urls_from_url(url, recursive=recursive)
+                importer.extract_media_urls_from_url(url, recursive=True, depth_limit=recursive)
                 t.finish()
         else:
             for file in all_files:

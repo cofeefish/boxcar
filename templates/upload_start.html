@@ -31,7 +31,18 @@
             <input class="text-center" placeholder="Paste URL here" type="text" name="upload[source]" id="upload_source" onchange="urlHandler(event)">
         </div>
         <div class="input text-center">
-          <span><label for="upload[recursive]">recursive depth limit</label><input name="upload[recursive]" value="3" type="slider"></input></span>
+            <span class="initial">
+                <label for="upload[recursive]">recursive depth limit</label>
+                <input class="initial" name="upload[recursive]" id="depth_input" value="{{settings['recursive_upload_depth']}}" type="range" max="5"></input>
+                <br>
+                <span id="depth_limit_number">{{settings['recursive_upload_depth']}}</span>
+            </span>
+          <span class="initial">
+            <label for="upload[recursive]">recursive breadth limit</label>
+            <input class="initial" name="upload[recursive]" id="breadth_input" value="{{settings['recursive_upload_breadth']}}" type="range" max="10"></input>
+            <br>
+            <span id="breadth_limit_number">{{settings['recursive_upload_breadth']}}</span>
+        </span>
         </div>
         <div class="input hidden">
             <input class="hidden" type="hidden" name="upload[referer_url]" id="upload_referer_url">
@@ -41,6 +52,23 @@
     </form>
 </body>
 <script type="text/javascript">
+    addEventListener("DOMContentLoaded", function() {
+        const depth_slider = document.getElementById("depth_input");
+        const breadth_slider = document.getElementById("breadth_input")
+        const depth_number = document.getElementById("depth_limit_number");
+        const breadth_number = document.getElementById("breadth_limit_number");
+        depth_slider.addEventListener("input", function() {
+            if (this.value == 1) {
+                depth_number.textContent = this.value + " level (provided url is media)";
+            } else {
+                depth_number.textContent = this.value + " levels";
+            }
+        });
+        breadth_slider.addEventListener("input", function() {
+            breadth_number.textContent = this.value;
+        });
+    });
+
     function urlHandler(ev) {
       document.getElementById("loader").hidden = false;
       ev.preventDefault();
