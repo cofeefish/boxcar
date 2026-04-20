@@ -217,9 +217,38 @@ def tag_wiki(request_method, request_obj: Request):
     tags = database.filter_tags(query)
     return render_template("tag_wiki.html", tag_dict=tags, search=query)
 
-def tag_wiki_tag(tag: str):
-    helpers.pagechange("tag wiki")
-    database.update_tag_detail_table()
-    tags = database.filter_tags(tag)
-    return render_template("tag_wiki.html", tag_dict=tags)
+def tag_wiki_tag(tag: str, method, request_obj: Request):
+    if method == "GET":
+        helpers.pagechange("tag page")
+        database.update_tag_detail_table()
 
+        tag_details = database.get_tag_details(tag)
+        if not tag_details:
+            return redirect('/tag_wiki')
+        robots = tag_details.get('robots', None)
+        assert type(robots) == dict
+        posts = database.filter_posts(tag, 0, num_returned=5, fix_posts=False)
+
+        aliases = ' '.join(robots.get('aliases', []))
+        implications = ' '.join(robots.get('implications', []))
+        reverse_implications = ' '.join(robots.get('reverse_implications', []))
+        deletions = ' '.join(robots.get('deletions', []))
+        return render_template("tag_page.html", tag=tag, posts=posts, aliases=aliases, implications=implications, reverse_implications=reverse_implications, deletions=deletions)
+    if method == "POST":
+        form = request_obj.form
+        aliases = form.get('aliases', '').split()
+        implications = form.get('implications', '').split()
+        reverse_implications = form.get('reverse_implications', '').split()
+        deletions = form.get('deletions', '').split()
+        robots = {
+            "aliases": aliases,
+            "implications": implications,
+            "reverse_implications": reverse_implications,
+            "deletions": deletions
+        }
+        
+        database.change_tag(tag, robots)
+        changes = database.run_tag_robots()
+        print(f"Tag robots made {changes} changes")
+        
+    return redirect('/tag_wiki')

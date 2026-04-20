@@ -571,12 +571,72 @@ def filter_tags(query:str, update=False, count=False) -> list:
     
     return tag_list
 
+
+def run_tag_robots(tag_name: str) -> int:
+    '''
+    runs tag robots on a single tag
+    tag robots modify tags:
+    implications add implied tags if a tag is present
+    reverse implications add own tag if an implied tag is present
+    aliases replace tags with their alias if present
+    deletions remove tags if they are present
+    '''
+    with open(tag_detail_table_path, 'r', encoding='utf-8') as f:
+        tag_table = dict(json.load(f))
+
+    with open(post_table_path, 'r', encoding='utf-8') as f:
+        post_table = dict(json.load(f))
+
+    changes_made = 0
+    #update posts and tag table seperately for less recursion
+
+
+    #update posts
+    for post in post_table['posts'].values():
+        post_obj = get_post(post['id'])
+        from helpers import post as post_class
+        assert type(post_obj) == post_class
+        if tag_name in post_obj.tag_list:
+            #run implications
+            robots = tag_table['tags'][tag_name].get('robots', {})
+            implications = robots.get('implications', [])
+            for implied_tag in implications:
+                if not implied_tag in post_obj.tag_list:
+                    post_obj.tag_list.append(implied_tag)
+                    changes_made += 1
+            #run reverse implications
+            reverse_implications = robots.get('reverse_implications', [])
+            for reverse_implied_tag in reverse_implications:
+                if reverse_implied_tag in post_obj.tag_list:
+                    if not tag_name in post_obj.tag_list:
+                        post_obj.tag_list.append(tag_name)
+                        changes_made += 1
+            #run aliases
+            aliases = robots.get('aliases', [])
+            for alias in aliases:
+                if alias in post_obj.tag_list:
+                    post_obj.tag_list.remove(alias)
+                    if not tag_name in post_obj.tag_list:
+                        post_obj.tag_list.append(tag_name)
+                        changes_made += 1
+            #run deletions
+            deletions = robots.get('deletions', [])
+            for deletion in deletions:
+                if deletion in post_obj.tag_list:
+                    post_obj.tag_list.remove(deletion)
+                    changes_made += 1
+        #save post
+        post_obj.save()
+    
+
+    return changes_made
+
 def update_tag_detail_table():
     posts = filter_posts("", fix_posts=False, num_returned=-1)
     with open(tag_detail_table_path, 'r', encoding='utf-8') as f:
         tag_table = dict(json.load(f))
 
-    "inner is in format of {'tagname: {name: *, count: *, robots: [*]} "
+    "inner is in format of {'tagname: {name: *, count: *, robots: {*}} "
     tag_inner_dict = dict(tag_table.get('tags', {}))
     for key in tag_inner_dict.keys():
         tag_inner_dict[key]['count'] = 0 # reset count
@@ -586,7 +646,7 @@ def update_tag_detail_table():
             if tag in tag_inner_dict.keys():
                 tag_inner_dict[tag]["count"] += 1
             else:
-                tag_inner_dict[tag] = {"name": tag, "count": 1, "robots": []}
+                tag_inner_dict[tag] = {"name": tag, "count": 1, "robots": {"aliases": [], "implications": [], "reverse_implications": [], "deletions": []}}
 
     tag_table = {
         "tags": tag_inner_dict,
@@ -595,6 +655,26 @@ def update_tag_detail_table():
     with open(tag_detail_table_path, 'w', encoding='utf-8') as f:
         json.dump(tag_table, f, indent=4)
 
+def get_tag_details(tag:str) -> dict|None:
+    with open(tag_detail_table_path, 'r', encoding='utf-8') as f:
+        tag_table = dict(json.load(f))
+    tag_inner_dict = dict(tag_table.get('tags', {}))
+    tag_details = tag_inner_dict.get(tag)
+    if tag_details == None:
+        print(f'tag {tag} not found in tag detail table')
+        return
+    return tag_details
+
+def change_tag(tag, robots_dict):
+    with open(tag_detail_table_path, 'r', encoding='utf-8') as f:
+        tag_table = dict(json.load(f))
+    tag_inner_dict = dict(tag_table.get('tags', {}))
+    if not tag in tag_inner_dict.keys():
+        print(f'tag {tag} not found in tag detail table')
+        return
+    tag_inner_dict[tag]['robots'] = robots_dict
+    with open(tag_detail_table_path, 'w', encoding='utf-8') as f:
+        json.dump(tag_table, f, indent=4)
 
 initialize_database()
 #setup logging

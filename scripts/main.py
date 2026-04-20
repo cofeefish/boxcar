@@ -66,8 +66,8 @@ def statistics(): return views.statistics()
 @app.route('/tag_wiki')
 def tag_wiki(): return views.tag_wiki(request.method, request)
 
-@app.route('/tag_wiki/<tag>')
-def tag_wiki_tag(tag): return views.tag_wiki_tag(tag)
+@app.route('/tag_wiki/<tag>', methods=['GET', 'POST'])
+def tag_wiki_tag(tag): return views.tag_wiki_tag(tag, request.method, request)
 
 ############################################
 

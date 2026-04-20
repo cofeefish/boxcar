@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ tag_name }} - Boxcar</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <header>
+        <h1 class="left-padded">Boxcar</h1>
+        <nav>
+            <menu class="left-padded">
+                <a href="/">Home</a>
+                <a href="/queue">Upload Queue</a>
+                <a href="/settings">Settings</a>
+                <a href="/statistics">Statistics</a>
+                <a href="/tag_wiki">Tag Wiki</a>
+            </menu>
+        </nav>  
+    </header>
+    <main class="page-content">
+        <h1>{{ tag }}</h1>
+        <h2>Robots</h2>
+        <div>
+            <form action="" method="post">
+                <input type="hidden" name="tag" value="{{ tag }}">
+                Aliases : <input type="text" name="aliases" value="{{ aliases}}">
+                Implications : <input type="text" name="implications" value="{{ implications }}">
+                Reverse Implications : <input type="text" name="reverse_implications" value="{{ reverse_implications }}">
+                Deletions : <input type="text" name="deletions" value="{{ deletions }}">
+                <input type="submit" value="Save Robots" class="button">
+            </form>
+        </div>
+        <h2>Posts tagged with "{{ tag }}"</h2>
+        {% if posts %}
+            <div class="post-grid">
+                {% for post in posts %}
+                   <div class="post {{border}}">
+                        <a href="/posts/{{post.id}}">
+                            <img src="{{post.thumbnail_link}}" data-title="{{ post.tag_string }}">
+                        </a>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p>No posts found with this tag.</p>
+        {% endif %}
+    </main>
